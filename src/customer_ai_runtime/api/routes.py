@@ -16,6 +16,7 @@ from customer_ai_runtime.api.schemas import (
     PromptUpdateRequest,
     RTCRoomCreateRequest,
     RTCRoomJoinRequest,
+    RuntimeConfigUpdateRequest,
     SessionCreateRequest,
     VoiceTurnRequest,
 )
@@ -23,7 +24,6 @@ from customer_ai_runtime.application.container import Container
 from customer_ai_runtime.core.errors import AppError
 from customer_ai_runtime.core.responses import success_response
 from customer_ai_runtime.domain.platform import ResolvedAuthContext
-
 
 router = APIRouter()
 
@@ -34,6 +34,9 @@ def get_container(request: Request) -> Container:
 
 async def authenticate(request: Request) -> ResolvedAuthContext:
     return await get_container(request).auth_service.authenticate_request(request)
+
+
+AUTH_CONTEXT_DEPENDENCY = Depends(authenticate)
 
 
 def require_admin(auth_context: ResolvedAuthContext) -> None:
@@ -48,7 +51,7 @@ async def healthz() -> JSONResponse:
 
 @router.get("/api/v1/auth/context")
 async def get_auth_context(
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     return success_response(auth_context.model_dump(mode="json"))
 
@@ -57,7 +60,7 @@ async def get_auth_context(
 async def resolve_context(
     payload: ContextResolveRequest,
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
     container.access_control.validate_tenant_access(auth_context, payload.tenant_id)
@@ -78,7 +81,7 @@ async def resolve_context(
 async def create_session(
     payload: SessionCreateRequest,
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
     container.access_control.validate_tenant_access(auth_context, payload.tenant_id)
@@ -91,11 +94,12 @@ async def get_session(
     session_id: str,
     tenant_id: str,
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
     container.access_control.validate_tenant_access(auth_context, tenant_id)
-    return success_response(container.session_service.get(tenant_id, session_id).model_dump(mode="json"))
+    session = container.session_service.get(tenant_id, session_id)
+    return success_response(session.model_dump(mode="json"))
 
 
 @router.get("/api/v1/sessions/{session_id}/messages")
@@ -103,7 +107,7 @@ async def get_session_messages(
     session_id: str,
     tenant_id: str,
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
     container.access_control.validate_tenant_access(auth_context, tenant_id)
@@ -115,7 +119,7 @@ async def get_session_messages(
 async def chat_message(
     payload: ChatMessageRequest,
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
     container.access_control.validate_tenant_access(auth_context, payload.tenant_id)
@@ -135,7 +139,7 @@ async def chat_message(
 async def handoff_chat(
     payload: HandoffRequest,
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
     container.access_control.validate_tenant_access(auth_context, payload.tenant_id)
@@ -147,7 +151,11 @@ async def handoff_chat(
         integration_context={},
         host_auth_context=auth_context.host_auth_context,
     )
-    handoff = await container.chat_service.handoff_service.create_package(session, payload.reason, context)
+    handoff = await container.chat_service.handoff_service.create_package(
+        session,
+        payload.reason,
+        context,
+    )
     container.session_service.save(session)
     return success_response(None if handoff is None else handoff.model_dump(mode="json"))
 
@@ -157,7 +165,7 @@ async def claim_session_human(
     session_id: str,
     payload: SessionCreateRequest,
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
     require_admin(auth_context)
@@ -171,12 +179,16 @@ async def add_human_reply(
     session_id: str,
     payload: HumanReplyRequest,
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
     require_admin(auth_context)
     container.access_control.validate_tenant_access(auth_context, payload.tenant_id)
-    result = container.session_service.add_human_reply(payload.tenant_id, session_id, payload.content)
+    result = container.session_service.add_human_reply(
+        payload.tenant_id,
+        session_id,
+        payload.content,
+    )
     return success_response(result.model_dump(mode="json"))
 
 
@@ -185,7 +197,7 @@ async def close_session(
     session_id: str,
     payload: SessionCreateRequest,
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
     require_admin(auth_context)
@@ -198,7 +210,7 @@ async def close_session(
 async def create_knowledge_base(
     payload: KnowledgeBaseCreateRequest,
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
     container.access_control.validate_tenant_access(auth_context, payload.tenant_id)
@@ -215,7 +227,7 @@ async def create_knowledge_base(
 async def list_knowledge_bases(
     tenant_id: str,
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
     container.access_control.validate_tenant_access(auth_context, tenant_id)
@@ -227,7 +239,7 @@ async def get_knowledge_base(
     knowledge_base_id: str,
     tenant_id: str,
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
     container.access_control.validate_tenant_access(auth_context, tenant_id)
@@ -240,7 +252,7 @@ async def add_knowledge_document(
     knowledge_base_id: str,
     payload: KnowledgeDocumentCreateRequest,
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
     container.access_control.validate_tenant_access(auth_context, payload.tenant_id)
@@ -265,7 +277,7 @@ async def search_knowledge_base(
     knowledge_base_id: str,
     payload: KnowledgeSearchRequest,
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
     container.access_control.validate_tenant_access(auth_context, payload.tenant_id)
@@ -284,7 +296,7 @@ async def search_knowledge_base(
 async def business_query(
     payload: BusinessQueryRequest,
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
     container.access_control.validate_tenant_access(auth_context, payload.tenant_id)
@@ -307,7 +319,7 @@ async def business_query(
 async def voice_turn(
     payload: VoiceTurnRequest,
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
     container.access_control.validate_tenant_access(auth_context, payload.tenant_id)
@@ -329,11 +341,12 @@ async def voice_turn(
 async def create_rtc_room(
     payload: RTCRoomCreateRequest,
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
     container.access_control.validate_tenant_access(auth_context, payload.tenant_id)
-    return success_response(container.rtc_service.create_room(payload.tenant_id).model_dump(mode="json"))
+    room = container.rtc_service.create_room(payload.tenant_id)
+    return success_response(room.model_dump(mode="json"))
 
 
 @router.post("/api/v1/rtc/rooms/{room_id}/join")
@@ -341,7 +354,7 @@ async def join_rtc_room(
     room_id: str,
     payload: RTCRoomJoinRequest,
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
     container.access_control.validate_tenant_access(auth_context, payload.tenant_id)
@@ -354,7 +367,7 @@ async def interrupt_rtc_room(
     room_id: str,
     payload: RTCRoomCreateRequest,
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
     container.access_control.validate_tenant_access(auth_context, payload.tenant_id)
@@ -367,7 +380,7 @@ async def end_rtc_room(
     room_id: str,
     payload: RTCRoomCreateRequest,
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
     container.access_control.validate_tenant_access(auth_context, payload.tenant_id)
@@ -378,17 +391,30 @@ async def end_rtc_room(
 @router.get("/api/v1/admin/metrics")
 async def admin_metrics(
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     require_admin(auth_context)
     return success_response(get_container(request).admin_service.get_metrics())
+
+
+@router.get("/api/v1/admin/metrics/summary")
+async def admin_metrics_summary(
+    request: Request,
+    tenant_id: str | None = Query(default=None, min_length=1, max_length=64),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
+) -> JSONResponse:
+    container = get_container(request)
+    require_admin(auth_context)
+    if tenant_id is not None:
+        container.access_control.validate_tenant_access(auth_context, tenant_id)
+    return success_response(container.admin_service.get_metrics_summary(tenant_id=tenant_id))
 
 
 @router.get("/api/v1/admin/sessions")
 async def admin_sessions(
     tenant_id: str,
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
     require_admin(auth_context)
@@ -399,17 +425,40 @@ async def admin_sessions(
 @router.get("/api/v1/admin/prompts")
 async def get_admin_prompts(
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     require_admin(auth_context)
     return success_response(get_container(request).admin_service.get_prompts())
+
+
+@router.get("/api/v1/admin/runtime-config")
+async def get_admin_runtime_config(
+    request: Request,
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
+) -> JSONResponse:
+    require_admin(auth_context)
+    return success_response(get_container(request).admin_service.get_runtime_config())
+
+
+@router.put("/api/v1/admin/runtime-config")
+async def update_admin_runtime_config(
+    payload: RuntimeConfigUpdateRequest,
+    request: Request,
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
+) -> JSONResponse:
+    require_admin(auth_context)
+    return success_response(
+        get_container(request).admin_service.update_runtime_config(
+            payload.model_dump(exclude_none=True)
+        )
+    )
 
 
 @router.put("/api/v1/admin/prompts")
 async def update_admin_prompts(
     payload: PromptUpdateRequest,
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     require_admin(auth_context)
     return success_response(
@@ -420,7 +469,7 @@ async def update_admin_prompts(
 @router.get("/api/v1/admin/policies")
 async def get_admin_policies(
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     require_admin(auth_context)
     return success_response(get_container(request).admin_service.get_policies())
@@ -430,7 +479,7 @@ async def get_admin_policies(
 async def update_admin_policies(
     payload: PolicyUpdateRequest,
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     require_admin(auth_context)
     return success_response(
@@ -441,17 +490,48 @@ async def update_admin_policies(
 @router.get("/api/v1/admin/diagnostics")
 async def get_admin_diagnostics(
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    tenant_id: str | None = Query(default=None, min_length=1, max_length=64),
+    session_id: str | None = Query(default=None, min_length=1, max_length=64),
+    room_id: str | None = Query(default=None, min_length=1, max_length=64),
+    level: str | None = Query(default=None, pattern="^(info|warning|error)$"),
+    code_prefix: str | None = Query(default=None, min_length=1, max_length=128),
+    limit: int = Query(default=100, ge=1, le=200),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
+    container = get_container(request)
     require_admin(auth_context)
-    return success_response(get_container(request).admin_service.diagnostics())
+    if tenant_id is not None:
+        container.access_control.validate_tenant_access(auth_context, tenant_id)
+    return success_response(
+        container.admin_service.diagnostics(
+            tenant_id=tenant_id,
+            session_id=session_id,
+            room_id=room_id,
+            level=level,
+            code_prefix=code_prefix,
+            limit=limit,
+        )
+    )
+
+
+@router.get("/api/v1/admin/sessions/{session_id}/monitor")
+async def get_admin_session_monitor(
+    session_id: str,
+    tenant_id: str,
+    request: Request,
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
+) -> JSONResponse:
+    container = get_container(request)
+    require_admin(auth_context)
+    container.access_control.validate_tenant_access(auth_context, tenant_id)
+    return success_response(container.admin_service.get_session_monitor(tenant_id, session_id))
 
 
 @router.get("/api/v1/admin/rooms")
 async def get_admin_rooms(
     tenant_id: str,
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
     require_admin(auth_context)
@@ -462,10 +542,23 @@ async def get_admin_rooms(
 @router.get("/api/v1/admin/providers/health")
 async def get_admin_provider_health(
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     require_admin(auth_context)
     return success_response(get_container(request).admin_service.provider_health())
+
+
+@router.get("/api/v1/admin/alerts")
+async def get_admin_alerts(
+    request: Request,
+    tenant_id: str | None = Query(default=None, min_length=1, max_length=64),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
+) -> JSONResponse:
+    container = get_container(request)
+    require_admin(auth_context)
+    if tenant_id is not None:
+        container.access_control.validate_tenant_access(auth_context, tenant_id)
+    return success_response(container.admin_service.get_alerts(tenant_id=tenant_id))
 
 
 @router.get("/api/v1/admin/tools/catalog")
@@ -475,7 +568,7 @@ async def get_admin_tool_catalog(
     industry: str | None = Query(default=None, min_length=1, max_length=64),
     channel: str | None = Query(default=None, min_length=1, max_length=64),
     include_disabled: bool = Query(default=True),
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
     require_admin(auth_context)
@@ -498,7 +591,7 @@ async def get_admin_tool_catalog_categories(
     industry: str | None = Query(default=None, min_length=1, max_length=64),
     channel: str | None = Query(default=None, min_length=1, max_length=64),
     include_disabled: bool = Query(default=True),
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
     require_admin(auth_context)
@@ -517,7 +610,7 @@ async def get_admin_tool_catalog_categories(
 @router.get("/api/v1/admin/plugins")
 async def get_admin_plugins(
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     require_admin(auth_context)
     return success_response(get_container(request).admin_service.list_plugins())
@@ -527,7 +620,7 @@ async def get_admin_plugins(
 async def enable_admin_plugin(
     plugin_id: str,
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     require_admin(auth_context)
     return success_response(get_container(request).admin_service.enable_plugin(plugin_id))
@@ -537,7 +630,7 @@ async def enable_admin_plugin(
 async def disable_admin_plugin(
     plugin_id: str,
     request: Request,
-    auth_context: ResolvedAuthContext = Depends(authenticate),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     require_admin(auth_context)
     return success_response(get_container(request).admin_service.disable_plugin(plugin_id))

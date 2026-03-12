@@ -5,7 +5,13 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from customer_ai_runtime.domain.models import DiagnosticEvent, DiagnosticLevel, PolicyConfig, PromptConfig
+from customer_ai_runtime.domain.models import (
+    AlertRuleConfig,
+    DiagnosticEvent,
+    DiagnosticLevel,
+    PolicyConfig,
+    PromptConfig,
+)
 from customer_ai_runtime.repositories.memory import InMemoryDiagnosticsRepository
 
 
@@ -37,6 +43,7 @@ class RuntimeConfigService:
             ),
         )
         self._policies = PolicyConfig()
+        self._alerts = AlertRuleConfig()
         self._plugin_states: dict[str, bool] = {}
         self._load()
 
@@ -64,6 +71,22 @@ class RuntimeConfigService:
         self._flush()
         return self.get_plugin_states()
 
+    def get_alert_rules(self) -> AlertRuleConfig:
+        return self._alerts.model_copy(deep=True)
+
+    def update_alert_rules(self, data: dict[str, Any]) -> AlertRuleConfig:
+        self._alerts = self._alerts.model_copy(update=data)
+        self._flush()
+        return self.get_alert_rules()
+
+    def snapshot(self) -> dict[str, Any]:
+        return {
+            "prompts": self.get_prompts().model_dump(mode="json"),
+            "policies": self.get_policies().model_dump(mode="json"),
+            "alerts": self.get_alert_rules().model_dump(mode="json"),
+            "plugin_states": self.get_plugin_states(),
+        }
+
     def _load(self) -> None:
         if not self._storage_path or not self._storage_path.exists():
             return
@@ -72,8 +95,12 @@ class RuntimeConfigService:
             self._prompts = PromptConfig.model_validate(payload["prompts"])
         if "policies" in payload:
             self._policies = PolicyConfig.model_validate(payload["policies"])
+        if "alerts" in payload:
+            self._alerts = AlertRuleConfig.model_validate(payload["alerts"])
         if "plugin_states" in payload:
-            self._plugin_states = {str(key): bool(value) for key, value in payload["plugin_states"].items()}
+            self._plugin_states = {
+                str(key): bool(value) for key, value in payload["plugin_states"].items()
+            }
 
     def _flush(self) -> None:
         if not self._storage_path:
@@ -83,6 +110,7 @@ class RuntimeConfigService:
                 {
                     "prompts": self._prompts.model_dump(mode="json"),
                     "policies": self._policies.model_dump(mode="json"),
+                    "alerts": self._alerts.model_dump(mode="json"),
                     "plugin_states": self._plugin_states,
                 },
                 ensure_ascii=False,
@@ -120,6 +148,36 @@ class DiagnosticsService:
 
     def list_recent(self) -> list[DiagnosticEvent]:
         return self._repository.list_recent()
+
+    def query(
+        self,
+        *,
+        tenant_id: str | None = None,
+        session_id: str | None = None,
+        room_id: str | None = None,
+        level: str | None = None,
+        code_prefix: str | None = None,
+        limit: int | None = None,
+    ) -> list[DiagnosticEvent]:
+        events = self._repository.list_recent()
+        filtered: list[DiagnosticEvent] = []
+        normalized_level = None if level is None else level.lower()
+        for event in events:
+            context = event.context
+            if tenant_id is not None and str(context.get("tenant_id")) != tenant_id:
+                continue
+            if session_id is not None and str(context.get("session_id")) != session_id:
+                continue
+            if room_id is not None and str(context.get("room_id")) != room_id:
+                continue
+            if normalized_level is not None and event.level.value != normalized_level:
+                continue
+            if code_prefix is not None and not event.code.startswith(code_prefix):
+                continue
+            filtered.append(event)
+            if limit is not None and len(filtered) >= limit:
+                break
+        return filtered
 
 
 def _config_file(storage_root: str | Path | None) -> Path | None:

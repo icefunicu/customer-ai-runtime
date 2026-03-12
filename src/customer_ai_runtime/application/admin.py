@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from typing import Any
 
 from customer_ai_runtime.application.knowledge import KnowledgeService
@@ -47,6 +48,56 @@ class AdminService:
     def get_metrics(self) -> dict[str, Any]:
         return self.metrics.snapshot()
 
+    def get_metrics_summary(self, tenant_id: str | None = None) -> dict[str, Any]:
+        sessions = self.session_service.list_by_tenant(tenant_id) if tenant_id else []
+        diagnostics = self.diagnostics_service.query(tenant_id=tenant_id, limit=200)
+        level_counts = Counter(event.level.value for event in diagnostics)
+        route_counts = {
+            key.removeprefix("route_"): value
+            for key, value in self.metrics.snapshot().items()
+            if key.startswith("route_")
+        }
+        waiting_human = sum(1 for session in sessions if session.waiting_human)
+        return {
+            "tenant_id": tenant_id,
+            "counters": self.metrics.snapshot(),
+            "route_counts": route_counts,
+            "session_summary": {
+                "total": len(sessions),
+                "waiting_human": waiting_human,
+                "active": sum(1 for session in sessions if session.state.value == "active"),
+                "closed": sum(1 for session in sessions if session.state.value == "closed"),
+            },
+            "diagnostic_summary": {
+                "sample_size": len(diagnostics),
+                "info": level_counts.get("info", 0),
+                "warning": level_counts.get("warning", 0),
+                "error": level_counts.get("error", 0),
+            },
+        }
+
+    def get_runtime_config(self) -> dict[str, Any]:
+        return self.runtime_config.snapshot()
+
+    def update_runtime_config(self, data: dict[str, Any]) -> dict[str, Any]:
+        prompts = data.get("prompts")
+        if prompts:
+            self.runtime_config.update_prompts(prompts)
+        policies = data.get("policies")
+        if policies:
+            self.runtime_config.update_policies(policies)
+        alerts = data.get("alerts")
+        if alerts:
+            self.runtime_config.update_alert_rules(alerts)
+        plugin_states = data.get("plugin_states")
+        if isinstance(plugin_states, dict):
+            for plugin_id, enabled in plugin_states.items():
+                if bool(enabled):
+                    self.plugin_registry.enable(str(plugin_id))
+                else:
+                    self.plugin_registry.disable(str(plugin_id))
+        return self.get_runtime_config()
+
     def get_prompts(self) -> dict[str, Any]:
         return self.runtime_config.get_prompts().model_dump(mode="json")
 
@@ -59,8 +110,27 @@ class AdminService:
     def update_policies(self, data: dict[str, Any]) -> dict[str, Any]:
         return self.runtime_config.update_policies(data).model_dump(mode="json")
 
-    def diagnostics(self) -> list[dict[str, Any]]:
-        return [event.model_dump(mode="json") for event in self.diagnostics_service.list_recent()]
+    def diagnostics(
+        self,
+        *,
+        tenant_id: str | None = None,
+        session_id: str | None = None,
+        room_id: str | None = None,
+        level: str | None = None,
+        code_prefix: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        return [
+            event.model_dump(mode="json")
+            for event in self.diagnostics_service.query(
+                tenant_id=tenant_id,
+                session_id=session_id,
+                room_id=room_id,
+                level=level,
+                code_prefix=code_prefix,
+                limit=limit,
+            )
+        ]
 
     def list_knowledge_bases(self, tenant_id: str) -> list[dict[str, Any]]:
         return [
@@ -70,6 +140,107 @@ class AdminService:
 
     def list_rooms(self, tenant_id: str) -> list[dict[str, Any]]:
         return [room.model_dump(mode="json") for room in self.rtc_service.list_rooms(tenant_id)]
+
+    def get_session_monitor(self, tenant_id: str, session_id: str) -> dict[str, Any]:
+        session = self.session_service.get(tenant_id, session_id)
+        related_rooms = [
+            room.model_dump(mode="json")
+            for room in self.rtc_service.list_rooms(tenant_id)
+            if room.session_id == session_id
+        ]
+        diagnostics = self.diagnostics(
+            tenant_id=tenant_id,
+            session_id=session_id,
+            limit=100,
+        )
+        return {
+            "session": session.model_dump(mode="json"),
+            "message_count": len(session.messages),
+            "last_message": None
+            if not session.messages
+            else session.messages[-1].model_dump(mode="json"),
+            "related_rooms": related_rooms,
+            "diagnostics": diagnostics,
+        }
+
+    def get_alerts(self, tenant_id: str | None = None) -> list[dict[str, Any]]:
+        alerts: list[dict[str, Any]] = []
+        rules = self.runtime_config.get_alert_rules()
+
+        if rules.provider_not_ready_enabled:
+            not_ready_providers = [
+                {
+                    "name": provider_name,
+                    "provider": payload["provider"],
+                }
+                for provider_name, payload in self.provider_health().items()
+                if not payload["ready"]
+            ]
+            if not_ready_providers:
+                alerts.append(
+                    {
+                        "severity": "critical",
+                        "code": "provider.not_ready",
+                        "message": "one or more providers are not ready",
+                        "scope": {"tenant_id": tenant_id},
+                        "count": len(not_ready_providers),
+                        "providers": not_ready_providers,
+                    }
+                )
+
+        error_events = self.diagnostics_service.query(
+            tenant_id=tenant_id,
+            level="error",
+            limit=rules.diagnostic_error_sample_limit,
+        )
+        if len(error_events) >= rules.diagnostic_error_threshold:
+            alerts.append(
+                {
+                    "severity": "warning",
+                    "code": "diagnostic.error_threshold",
+                    "message": "diagnostic error threshold reached",
+                    "scope": {"tenant_id": tenant_id},
+                    "count": len(error_events),
+                    "threshold": rules.diagnostic_error_threshold,
+                    "events": [
+                        {
+                            "event_id": event.event_id,
+                            "code": event.code,
+                            "message": event.message,
+                            "context": event.context,
+                        }
+                        for event in error_events[:5]
+                    ],
+                }
+            )
+
+        if tenant_id is not None:
+            waiting_sessions = [
+                session
+                for session in self.session_service.list_by_tenant(tenant_id)
+                if session.waiting_human
+            ]
+            if len(waiting_sessions) >= rules.waiting_human_session_threshold:
+                alerts.append(
+                    {
+                        "severity": "warning",
+                        "code": "session.waiting_human_threshold",
+                        "message": "waiting human session threshold reached",
+                        "scope": {"tenant_id": tenant_id},
+                        "count": len(waiting_sessions),
+                        "threshold": rules.waiting_human_session_threshold,
+                        "sessions": [
+                            {
+                                "session_id": session.session_id,
+                                "state": session.state.value,
+                            }
+                            for session in waiting_sessions[
+                                : rules.waiting_human_session_sample_limit
+                            ]
+                        ],
+                    }
+                )
+        return alerts
 
     def provider_health(self) -> dict[str, dict[str, Any]]:
         return {

@@ -4,7 +4,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-
 ChannelType = Literal["web", "app", "h5", "mini_program", "app_voice", "rtc", "admin"]
 
 
@@ -108,6 +107,21 @@ class PolicyUpdateRequest(BaseModel):
     risk_keywords: list[str] | None = None
     human_request_keywords: list[str] | None = None
     business_keyword_map: dict[str, list[str]] | None = None
+
+
+class AlertRuleUpdateRequest(BaseModel):
+    provider_not_ready_enabled: bool | None = None
+    diagnostic_error_threshold: int | None = Field(default=None, ge=1, le=200)
+    diagnostic_error_sample_limit: int | None = Field(default=None, ge=1, le=200)
+    waiting_human_session_threshold: int | None = Field(default=None, ge=1, le=200)
+    waiting_human_session_sample_limit: int | None = Field(default=None, ge=1, le=200)
+
+
+class RuntimeConfigUpdateRequest(BaseModel):
+    prompts: PromptUpdateRequest | None = None
+    policies: PolicyUpdateRequest | None = None
+    alerts: AlertRuleUpdateRequest | None = None
+    plugin_states: dict[str, bool] | None = None
 
 
 class ContextResolveRequest(TenantScopedRequest):

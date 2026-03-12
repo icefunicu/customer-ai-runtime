@@ -258,9 +258,43 @@
 
 ### `GET /api/v1/admin/metrics`
 
+### `GET /api/v1/admin/metrics/summary`
+
+- 用途：返回指标计数、按路由聚合的统计、会话摘要和诊断摘要
+- 可选查询参数：
+  - `tenant_id`
+
 ### `GET /api/v1/admin/sessions?tenant_id=demo-tenant`
 
+### `GET /api/v1/admin/sessions/{session_id}/monitor?tenant_id=demo-tenant`
+
+- 用途：查看单个会话的监控视图
+- 返回重点：
+  - `session`
+  - `message_count`
+  - `last_message`
+  - `related_rooms`
+  - `diagnostics`
+
 ### `GET /api/v1/admin/prompts`
+
+### `GET /api/v1/admin/runtime-config`
+
+- 用途：查看运行时热配置快照
+- 返回重点：
+  - `prompts`
+  - `policies`
+  - `alerts`
+  - `plugin_states`
+
+### `PUT /api/v1/admin/runtime-config`
+
+- 用途：一次性热更新运行时配置
+- 支持更新：
+  - `prompts`
+  - `policies`
+  - `alerts`
+  - `plugin_states`
 
 ### `PUT /api/v1/admin/prompts`
 
@@ -270,9 +304,28 @@
 
 ### `GET /api/v1/admin/diagnostics`
 
+可选查询参数：
+
+- `tenant_id`
+- `session_id`
+- `room_id`
+- `level`
+- `code_prefix`
+- `limit`
+
 ### `GET /api/v1/admin/rooms?tenant_id=demo-tenant`
 
 ### `GET /api/v1/admin/providers/health`
+
+### `GET /api/v1/admin/alerts`
+
+- 用途：查看需要关注的运维告警线索
+- 可选查询参数：
+  - `tenant_id`
+- 告警规则来源：
+  - `runtime-config.alerts.provider_not_ready_enabled`
+  - `runtime-config.alerts.diagnostic_error_threshold`
+  - `runtime-config.alerts.waiting_human_session_threshold`
 
 ### `GET /api/v1/admin/tools/catalog`
 

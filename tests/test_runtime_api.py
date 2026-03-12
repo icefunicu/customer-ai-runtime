@@ -225,6 +225,47 @@ def test_admin_policy_update(client: TestClient) -> None:
     assert response.json()["data"]["knowledge_top_k"] == 5
 
 
+def test_admin_runtime_config_hot_update(client: TestClient) -> None:
+    response = client.put(
+        "/api/v1/admin/runtime-config",
+        headers=ADMIN_HEADERS,
+        json={
+            "prompts": {"fallback_answer": "请先提供订单号。"},
+            "policies": {"knowledge_top_k": 6},
+            "alerts": {
+                "diagnostic_error_threshold": 2,
+                "waiting_human_session_threshold": 2,
+            },
+            "plugin_states": {"route.business_intent": False},
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["prompts"]["fallback_answer"] == "请先提供订单号。"
+    assert data["policies"]["knowledge_top_k"] == 6
+    assert data["alerts"]["diagnostic_error_threshold"] == 2
+    assert data["alerts"]["waiting_human_session_threshold"] == 2
+    assert data["plugin_states"]["route.business_intent"] is False
+
+    runtime_config = client.get("/api/v1/admin/runtime-config", headers=ADMIN_HEADERS)
+    assert runtime_config.status_code == 200
+    assert runtime_config.json()["data"]["policies"]["knowledge_top_k"] == 6
+    assert runtime_config.json()["data"]["alerts"]["diagnostic_error_threshold"] == 2
+
+    chat_after_disable = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "订单 ORD-1001 发货了吗",
+            "integration_context": {"industry": "ecommerce"},
+        },
+    )
+    assert chat_after_disable.status_code == 200
+    assert chat_after_disable.json()["data"]["route"] == "fallback"
+
+
 def test_admin_room_and_knowledge_listing(client: TestClient) -> None:
     seed_knowledge_base(client)
     kb_list = client.get(
@@ -252,6 +293,47 @@ def test_admin_room_and_knowledge_listing(client: TestClient) -> None:
     diagnostics = client.get("/api/v1/admin/diagnostics", headers=ADMIN_HEADERS)
     assert diagnostics.status_code == 200
     assert diagnostics.json()["data"]
+
+
+def test_admin_session_monitor_and_diagnostics_filters(client: TestClient) -> None:
+    chat = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "我要转人工客服",
+        },
+    )
+    assert chat.status_code == 200
+    session_id = chat.json()["data"]["session_id"]
+
+    monitor = client.get(
+        f"/api/v1/admin/sessions/{session_id}/monitor",
+        headers=ADMIN_HEADERS,
+        params={"tenant_id": "demo-tenant"},
+    )
+    assert monitor.status_code == 200
+    monitor_data = monitor.json()["data"]
+    assert monitor_data["session"]["session_id"] == session_id
+    assert monitor_data["message_count"] >= 2
+    assert any(item["code"].startswith("chat.") for item in monitor_data["diagnostics"])
+
+    filtered = client.get(
+        "/api/v1/admin/diagnostics",
+        headers=ADMIN_HEADERS,
+        params={
+            "tenant_id": "demo-tenant",
+            "session_id": session_id,
+            "code_prefix": "chat.",
+            "limit": 20,
+        },
+    )
+    assert filtered.status_code == 200
+    filtered_data = filtered.json()["data"]
+    assert filtered_data
+    assert all(item["context"]["session_id"] == session_id for item in filtered_data)
+    assert all(item["code"].startswith("chat.") for item in filtered_data)
 
 
 def test_admin_tool_catalog_filters(client: TestClient) -> None:
@@ -291,6 +373,69 @@ def test_admin_tool_catalog_categories(client: TestClient) -> None:
     assert ecommerce["tool_count"] >= 2
     assert ecommerce["enabled_count"] >= 2
     assert "after_sale_status" in ecommerce["tools"]
+
+
+def test_admin_metrics_summary_and_alerts(client: TestClient) -> None:
+    threshold_update = client.put(
+        "/api/v1/admin/runtime-config",
+        headers=ADMIN_HEADERS,
+        json={"alerts": {"waiting_human_session_threshold": 2}},
+    )
+    assert threshold_update.status_code == 200
+
+    chat = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "我要转人工",
+        },
+    )
+    assert chat.status_code == 200
+
+    summary = client.get(
+        "/api/v1/admin/metrics/summary",
+        headers=ADMIN_HEADERS,
+        params={"tenant_id": "demo-tenant"},
+    )
+    assert summary.status_code == 200
+    summary_data = summary.json()["data"]
+    assert summary_data["session_summary"]["total"] >= 1
+    assert "chat_requests" in summary_data["counters"]
+
+    alerts = client.get(
+        "/api/v1/admin/alerts",
+        headers=ADMIN_HEADERS,
+        params={"tenant_id": "demo-tenant"},
+    )
+    assert alerts.status_code == 200
+    alert_codes = {item["code"] for item in alerts.json()["data"]}
+    assert "session.waiting_human_threshold" not in alert_codes
+
+    second_chat = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "我要转人工客服",
+        },
+    )
+    assert second_chat.status_code == 200
+
+    alerts_after_threshold = client.get(
+        "/api/v1/admin/alerts",
+        headers=ADMIN_HEADERS,
+        params={"tenant_id": "demo-tenant"},
+    )
+    assert alerts_after_threshold.status_code == 200
+    alert_payload = {
+        item["code"]: item for item in alerts_after_threshold.json()["data"]
+    }
+    assert "session.waiting_human_threshold" in alert_payload
+    assert alert_payload["session.waiting_human_threshold"]["count"] >= 2
+    assert alert_payload["session.waiting_human_threshold"]["threshold"] == 2
 
 
 def test_auth_context_with_api_key(client: TestClient) -> None:

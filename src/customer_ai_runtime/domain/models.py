@@ -242,6 +242,14 @@ class PolicyConfig(BaseModel):
     )
 
 
+class AlertRuleConfig(BaseModel):
+    provider_not_ready_enabled: bool = True
+    diagnostic_error_threshold: int = 1
+    diagnostic_error_sample_limit: int = 20
+    waiting_human_session_threshold: int = 1
+    waiting_human_session_sample_limit: int = 10
+
+
 class DiagnosticEvent(BaseModel):
     event_id: str = Field(default_factory=lambda: new_id("diag"))
     level: DiagnosticLevel
