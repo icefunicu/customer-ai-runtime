@@ -36,6 +36,14 @@ dev = [
   "pytest-cov>=7.0.0",
   "ruff>=0.14.2"
 ]
+providers = [
+  "aliyun-python-sdk-core>=2.16.0",
+  "grpcio>=1.71.0",
+  "pinecone>=7.3.0",
+  "pymilvus>=2.6.0",
+  "tencentcloud-sdk-python-asr>=3.0.0",
+  "tencentcloud-sdk-python-tts>=3.0.0"
+]
 
 [project.scripts]
 customer-ai-runtime = "customer_ai_runtime.__main__:main"
@@ -57,4 +65,3 @@ target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
-

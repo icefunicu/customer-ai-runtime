@@ -69,6 +69,20 @@
 - Python 3.13+
 - 可选：OpenAI API Key、Qdrant 向量数据库
 
+### 提供商扩展
+
+当前仓库已落地的可选提供商包括：
+
+- 语音识别（ASR）：`local`、`openai`、`aliyun`、`tencent`
+- 语音合成（TTS）：`local`、`openai`、`aliyun`、`tencent`
+- 向量库：`local`、`qdrant`、`pinecone`、`milvus`
+- 业务适配器：`local`、`http`、`graphql`、`grpc`
+
+其中语音提供商的最小配置如下：
+
+- 阿里云：`CUSTOMER_AI_ASR_PROVIDER=aliyun` / `CUSTOMER_AI_TTS_PROVIDER=aliyun`，并填写 `CUSTOMER_AI_ALIYUN_ACCESS_KEY_ID`、`CUSTOMER_AI_ALIYUN_ACCESS_KEY_SECRET`、`CUSTOMER_AI_ALIYUN_APP_KEY`
+- 腾讯云：`CUSTOMER_AI_ASR_PROVIDER=tencent` / `CUSTOMER_AI_TTS_PROVIDER=tencent`，并填写 `CUSTOMER_AI_TENCENT_SECRET_ID`、`CUSTOMER_AI_TENCENT_SECRET_KEY`
+
 ### 安装
 
 ```bash
@@ -83,6 +97,9 @@ source .venv/bin/activate  # Linux/Mac
 
 # 安装依赖
 pip install -e ".[dev]"
+
+# 若需 Pinecone / Milvus / gRPC / 阿里云 / 腾讯云 提供商
+pip install -e ".[dev,providers]"
 ```
 
 ### 配置
@@ -91,6 +108,8 @@ pip install -e ".[dev]"
 cp .env.example .env
 # 编辑 .env 文件，配置你的 API Key 和数据库连接
 ```
+
+阿里云语音默认走官方智能语音交互 RESTful 接口，一句话识别与语音合成都使用 `AppKey + Token` 链路，运行时会在服务端自动换取短期 Token。腾讯云语音默认走官方 Python SDK，请确保已安装 `providers` extra。
 
 ### 启动服务
 

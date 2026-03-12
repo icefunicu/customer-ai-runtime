@@ -18,18 +18,49 @@ from customer_ai_runtime.application.handoff import HandoffService
 from customer_ai_runtime.application.knowledge import KnowledgeService
 from customer_ai_runtime.application.plugins import PluginRegistry, build_builtin_plugins
 from customer_ai_runtime.application.routing import RoutingService
-from customer_ai_runtime.application.runtime import DiagnosticsService, MetricsService, RuntimeConfigService
+from customer_ai_runtime.application.runtime import (
+    DiagnosticsService,
+    MetricsService,
+    RuntimeConfigService,
+)
 from customer_ai_runtime.application.session import SessionService
 from customer_ai_runtime.application.tool_catalog import ToolCatalogService
 from customer_ai_runtime.application.tooling import ToolService
 from customer_ai_runtime.application.voice_rtc import RTCService, VoiceService
 from customer_ai_runtime.core.config import Settings
-from customer_ai_runtime.providers.base import ASRProvider, BusinessAdapter, LLMProvider, TTSProvider, VectorStoreProvider
+from customer_ai_runtime.providers.aliyun_provider import AliyunASRProvider, AliyunTTSProvider
+from customer_ai_runtime.providers.base import (
+    ASRProvider,
+    BusinessAdapter,
+    LLMProvider,
+    TTSProvider,
+    VectorStoreProvider,
+)
+from customer_ai_runtime.providers.graphql_business_provider import GraphQLBusinessAdapter
+from customer_ai_runtime.providers.grpc_business_provider import GrpcBusinessAdapter
 from customer_ai_runtime.providers.http_business_provider import HttpBusinessAdapter
-from customer_ai_runtime.providers.local import LocalASRProvider, LocalBusinessAdapter, LocalLLMProvider, LocalTTSProvider, LocalVectorStoreProvider
-from customer_ai_runtime.providers.openai_provider import OpenAIASRProvider, OpenAILLMProvider, OpenAITTSProvider
+from customer_ai_runtime.providers.local import (
+    LocalASRProvider,
+    LocalBusinessAdapter,
+    LocalLLMProvider,
+    LocalTTSProvider,
+    LocalVectorStoreProvider,
+)
+from customer_ai_runtime.providers.milvus_provider import MilvusVectorStoreProvider
+from customer_ai_runtime.providers.openai_provider import (
+    OpenAIASRProvider,
+    OpenAILLMProvider,
+    OpenAITTSProvider,
+)
+from customer_ai_runtime.providers.pinecone_provider import PineconeVectorStoreProvider
 from customer_ai_runtime.providers.qdrant_provider import QdrantVectorStoreProvider
-from customer_ai_runtime.repositories.memory import InMemoryDiagnosticsRepository, InMemoryKnowledgeRepository, InMemoryRTCRepository, InMemorySessionRepository
+from customer_ai_runtime.providers.tencent_provider import TencentASRProvider, TencentTTSProvider
+from customer_ai_runtime.repositories.memory import (
+    InMemoryDiagnosticsRepository,
+    InMemoryKnowledgeRepository,
+    InMemoryRTCRepository,
+    InMemorySessionRepository,
+)
 
 
 @dataclass
@@ -67,8 +98,12 @@ class ContainerOverrides:
 
 def build_container(settings: Settings, overrides: ContainerOverrides | None = None) -> Container:
     overrides = overrides or ContainerOverrides()
-    session_repository = overrides.session_repository or InMemorySessionRepository(settings.storage_root)
-    knowledge_repository = overrides.knowledge_repository or InMemoryKnowledgeRepository(settings.storage_root)
+    session_repository = overrides.session_repository or InMemorySessionRepository(
+        settings.storage_root
+    )
+    knowledge_repository = overrides.knowledge_repository or InMemoryKnowledgeRepository(
+        settings.storage_root
+    )
     rtc_repository = overrides.rtc_repository or InMemoryRTCRepository(settings.storage_root)
     diagnostics_repository = overrides.diagnostics_repository or InMemoryDiagnosticsRepository(
         storage_root=settings.storage_root
@@ -160,22 +195,38 @@ def _build_llm_provider(settings: Settings) -> LLMProvider:
 def _build_asr_provider(settings: Settings) -> ASRProvider:
     if settings.asr_provider == "openai":
         return OpenAIASRProvider(settings)
+    if settings.asr_provider == "aliyun":
+        return AliyunASRProvider(settings)
+    if settings.asr_provider == "tencent":
+        return TencentASRProvider(settings)
     return LocalASRProvider()
 
 
 def _build_tts_provider(settings: Settings) -> TTSProvider:
     if settings.tts_provider == "openai":
         return OpenAITTSProvider(settings)
+    if settings.tts_provider == "aliyun":
+        return AliyunTTSProvider(settings)
+    if settings.tts_provider == "tencent":
+        return TencentTTSProvider(settings)
     return LocalTTSProvider()
 
 
 def _build_vector_store(settings: Settings) -> VectorStoreProvider:
     if settings.vector_provider == "qdrant":
         return QdrantVectorStoreProvider(settings)
+    if settings.vector_provider == "pinecone":
+        return PineconeVectorStoreProvider(settings)
+    if settings.vector_provider == "milvus":
+        return MilvusVectorStoreProvider(settings)
     return LocalVectorStoreProvider()
 
 
 def _build_business_adapter(settings: Settings) -> BusinessAdapter:
     if settings.business_provider == "http":
         return HttpBusinessAdapter(settings)
+    if settings.business_provider == "graphql":
+        return GraphQLBusinessAdapter(settings)
+    if settings.business_provider == "grpc":
+        return GrpcBusinessAdapter(settings)
     return LocalBusinessAdapter()
