@@ -58,6 +58,16 @@ class AdminService:
             if key.startswith("route_")
         }
         waiting_human = sum(1 for session in sessions if session.waiting_human)
+        rated_sessions = [session for session in sessions if session.satisfaction_score is not None]
+        satisfaction_distribution = Counter(
+            str(session.satisfaction_score) for session in rated_sessions if session.satisfaction_score is not None
+        )
+        average_satisfaction = None
+        if rated_sessions:
+            average_satisfaction = round(
+                sum(session.satisfaction_score or 0 for session in rated_sessions) / len(rated_sessions),
+                2,
+            )
         return {
             "tenant_id": tenant_id,
             "counters": self.metrics.snapshot(),
@@ -67,6 +77,11 @@ class AdminService:
                 "waiting_human": waiting_human,
                 "active": sum(1 for session in sessions if session.state.value == "active"),
                 "closed": sum(1 for session in sessions if session.state.value == "closed"),
+            },
+            "satisfaction_summary": {
+                "rated_sessions": len(rated_sessions),
+                "average_score": average_satisfaction,
+                "distribution": dict(satisfaction_distribution),
             },
             "diagnostic_summary": {
                 "sample_size": len(diagnostics),

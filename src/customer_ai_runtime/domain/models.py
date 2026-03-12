@@ -98,6 +98,8 @@ class Session(BaseModel):
     last_route: RouteType | None = None
     intent_stack: list[IntentFrame] = Field(default_factory=list)
     waiting_human: bool = False
+    satisfaction_score: int | None = Field(default=None, ge=1, le=5)
+    satisfaction_submitted_at: datetime | None = None
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 

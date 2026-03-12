@@ -185,6 +185,46 @@ def test_handoff_flow(client: TestClient) -> None:
     assert close.json()["data"]["state"] == "closed"
 
 
+def test_close_session_can_record_satisfaction_score(client: TestClient) -> None:
+    chat = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "我的订单 ORD-1001 发货了吗",
+        },
+    )
+    assert chat.status_code == 200
+    session_id = chat.json()["data"]["session_id"]
+
+    close = client.post(
+        f"/api/v1/sessions/{session_id}/close",
+        headers=ADMIN_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "admin",
+            "satisfaction_score": 5,
+        },
+    )
+    assert close.status_code == 200
+    close_data = close.json()["data"]
+    assert close_data["state"] == "closed"
+    assert close_data["satisfaction_score"] == 5
+    assert close_data["satisfaction_submitted_at"] is not None
+
+    summary = client.get(
+        "/api/v1/admin/metrics/summary",
+        headers=ADMIN_HEADERS,
+        params={"tenant_id": "demo-tenant"},
+    )
+    assert summary.status_code == 200
+    satisfaction_summary = summary.json()["data"]["satisfaction_summary"]
+    assert satisfaction_summary["rated_sessions"] == 1
+    assert satisfaction_summary["average_score"] == 5.0
+    assert satisfaction_summary["distribution"]["5"] == 1
+
+
 def test_voice_turn_flow(client: TestClient) -> None:
     transcript = "\u8ba2\u5355 ORD-1001 \u53d1\u8d27\u4e86\u5417"
     response = client.post(

@@ -17,6 +17,7 @@ from customer_ai_runtime.api.schemas import (
     RTCRoomCreateRequest,
     RTCRoomJoinRequest,
     RuntimeConfigUpdateRequest,
+    SessionCloseRequest,
     SessionCreateRequest,
     VoiceTurnRequest,
 )
@@ -195,14 +196,18 @@ async def add_human_reply(
 @router.post("/api/v1/sessions/{session_id}/close")
 async def close_session(
     session_id: str,
-    payload: SessionCreateRequest,
+    payload: SessionCloseRequest,
     request: Request,
     auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
     require_admin(auth_context)
     container.access_control.validate_tenant_access(auth_context, payload.tenant_id)
-    result = container.session_service.close_session(payload.tenant_id, session_id)
+    result = container.session_service.close_session(
+        payload.tenant_id,
+        session_id,
+        satisfaction_score=payload.satisfaction_score,
+    )
     return success_response(result.model_dump(mode="json"))
 
 

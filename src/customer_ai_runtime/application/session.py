@@ -4,6 +4,7 @@ from typing import Any
 
 from customer_ai_runtime.core.errors import AppError
 from customer_ai_runtime.domain.models import (
+    DiagnosticLevel,
     IntentFrame,
     Message,
     MessageRole,
@@ -128,10 +129,28 @@ class SessionService:
         session.waiting_human = False
         return self.save(session)
 
-    def close_session(self, tenant_id: str, session_id: str) -> Session:
+    def close_session(
+        self,
+        tenant_id: str,
+        session_id: str,
+        satisfaction_score: int | None = None,
+    ) -> Session:
         session = self.get(tenant_id, session_id)
         session.state = SessionState.CLOSED
         session.waiting_human = False
+        if satisfaction_score is not None:
+            session.satisfaction_score = satisfaction_score
+            session.satisfaction_submitted_at = utcnow()
+            self._diagnostics.record(
+                level=DiagnosticLevel.INFO,
+                code="session.satisfaction_recorded",
+                message="session satisfaction score recorded",
+                context={
+                    "tenant_id": tenant_id,
+                    "session_id": session_id,
+                    "satisfaction_score": satisfaction_score,
+                },
+            )
         return self.save(session)
 
     def add_human_reply(self, tenant_id: str, session_id: str, content: str) -> Session:

@@ -15,6 +15,11 @@ class SessionCreateRequest(TenantScopedRequest):
     channel: ChannelType = "web"
 
 
+class SessionCloseRequest(TenantScopedRequest):
+    channel: ChannelType = "admin"
+    satisfaction_score: int | None = Field(default=None, ge=1, le=5)
+
+
 class ChatMessageRequest(TenantScopedRequest):
     session_id: str | None = None
     channel: ChannelType = "web"

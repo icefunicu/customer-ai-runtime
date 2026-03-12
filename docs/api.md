@@ -87,7 +87,7 @@
 ### `GET /api/v1/sessions/{session_id}`
 
 - 用途：查询会话
-- 返回重点：`last_route`、`last_intent`、`intent_stack`
+- 返回重点：`last_route`、`last_intent`、`intent_stack`、`satisfaction_score`
 
 ### `GET /api/v1/sessions/{session_id}/messages?tenant_id=demo-tenant`
 
@@ -104,6 +104,7 @@
 ### `POST /api/v1/sessions/{session_id}/close`
 
 - 用途：关闭会话
+- 支持字段：`satisfaction_score`（1-5，可选）
 
 ## 5. 文本客服接口
 
@@ -275,7 +276,7 @@
 
 ### `GET /api/v1/admin/metrics/summary`
 
-- 用途：返回指标计数、按路由聚合的统计、会话摘要和诊断摘要
+- 用途：返回指标计数、按路由聚合的统计、会话摘要、满意度摘要和诊断摘要
 - 可选查询参数：
   - `tenant_id`
 
