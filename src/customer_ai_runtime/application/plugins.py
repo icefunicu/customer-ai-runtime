@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from collections.abc import Callable
 from typing import Any
 
@@ -28,7 +28,7 @@ from customer_ai_runtime.domain.platform import (
 from customer_ai_runtime.providers.base import BusinessAdapter
 
 
-class Plugin(ABC):
+class Plugin:
     def __init__(self, descriptor: PluginDescriptor) -> None:
         self.descriptor = descriptor
 
@@ -52,8 +52,27 @@ class BusinessToolPlugin(Plugin):
     optional_parameters: list[str]
     suggested_context_keys: list[str]
 
+    def resolve_parameters(
+        self,
+        context: PluginContext,
+        parameters: dict[str, Any],
+    ) -> dict[str, Any]:
+        return dict(parameters)
+
+    def missing_parameters(
+        self,
+        context: PluginContext,
+        parameters: dict[str, Any],
+    ) -> list[str]:
+        resolved = self.resolve_parameters(context, parameters)
+        return [key for key in self.required_parameters if not resolved.get(key)]
+
     @abstractmethod
-    async def execute(self, context: PluginContext, parameters: dict[str, Any]) -> BusinessResult: ...
+    async def execute(
+        self,
+        context: PluginContext,
+        parameters: dict[str, Any],
+    ) -> BusinessResult: ...
 
 
 class HumanHandoffPlugin(Plugin):
@@ -295,7 +314,13 @@ class KnowledgeQuestionRoutePlugin(RouteStrategyPlugin):
 
     async def match(self, context: PluginContext) -> RoutePluginResult:
         message = context.user_message or ""
-        if "?" in message or "？" in message or "怎么" in message or "为什么" in message or "规则" in message:
+        if (
+            "?" in message
+            or "？" in message
+            or "怎么" in message
+            or "为什么" in message
+            or "规则" in message
+        ):
             return RoutePluginResult(
                 matched=True,
                 route=RouteType.KNOWLEDGE.value,
@@ -339,6 +364,7 @@ class AdapterBackedBusinessToolPlugin(BusinessToolPlugin):
         suggested_context_keys: list[str],
         adapter: BusinessAdapter,
         industry_scopes: list[str] | None = None,
+        parameter_aliases: dict[str, list[str]] | None = None,
     ) -> None:
         super().__init__(
             PluginDescriptor(
@@ -357,16 +383,286 @@ class AdapterBackedBusinessToolPlugin(BusinessToolPlugin):
         self.optional_parameters = optional_parameters
         self.suggested_context_keys = suggested_context_keys
         self._adapter = adapter
+        self._parameter_aliases = parameter_aliases or {}
+
+    def resolve_parameters(
+        self,
+        context: PluginContext,
+        parameters: dict[str, Any],
+    ) -> dict[str, Any]:
+        resolved = dict(parameters)
+        for field_name, aliases in self._parameter_aliases.items():
+            if resolved.get(field_name):
+                continue
+            for alias in aliases:
+                value = _lookup_context_alias(context, alias)
+                if value not in (None, ""):
+                    resolved[field_name] = value
+                    break
+        return resolved
 
     async def execute(self, context: PluginContext, parameters: dict[str, Any]) -> BusinessResult:
+        resolved_parameters = self.resolve_parameters(context, parameters)
         return await self._adapter.execute(
             BusinessQuery(
                 tenant_id=context.tenant_id,
                 tool_name=self.tool_name,
-                parameters=parameters,
+                parameters=resolved_parameters,
                 session_id=context.session_id,
                 integration_context=context.integration_context,
             )
+        )
+
+
+class OrderStatusToolPlugin(AdapterBackedBusinessToolPlugin):
+    def __init__(self, adapter: BusinessAdapter) -> None:
+        super().__init__(
+            plugin_id="tool.order_status",
+            tool_name="order_status",
+            category="ecommerce",
+            description="Query order fulfillment and payment status.",
+            required_parameters=["order_id"],
+            optional_parameters=[],
+            suggested_context_keys=["shop_id", "customer_id", "order_id"],
+            adapter=adapter,
+            industry_scopes=["ecommerce"],
+            parameter_aliases={
+                "order_id": [
+                    "business_context.business_objects.order_id",
+                    "integration_context.business_objects.order_id",
+                    "integration_context.order_id",
+                ]
+            },
+        )
+
+
+class AfterSaleStatusToolPlugin(AdapterBackedBusinessToolPlugin):
+    def __init__(self, adapter: BusinessAdapter) -> None:
+        super().__init__(
+            plugin_id="tool.after_sale_status",
+            tool_name="after_sale_status",
+            category="ecommerce",
+            description="Query refund and after-sale status.",
+            required_parameters=["after_sale_id"],
+            optional_parameters=[],
+            suggested_context_keys=["shop_id", "customer_id", "after_sale_id"],
+            adapter=adapter,
+            industry_scopes=["ecommerce"],
+            parameter_aliases={
+                "after_sale_id": [
+                    "business_context.business_objects.after_sale_id",
+                    "integration_context.business_objects.after_sale_id",
+                    "integration_context.after_sale_id",
+                ]
+            },
+        )
+
+
+class LogisticsTrackingToolPlugin(AdapterBackedBusinessToolPlugin):
+    def __init__(self, adapter: BusinessAdapter) -> None:
+        super().__init__(
+            plugin_id="tool.logistics_tracking",
+            tool_name="logistics_tracking",
+            category="ecommerce",
+            description="Query logistics tracking.",
+            required_parameters=["tracking_no"],
+            optional_parameters=["carrier_code"],
+            suggested_context_keys=["shop_id", "tracking_no"],
+            adapter=adapter,
+            industry_scopes=["ecommerce", "logistics"],
+            parameter_aliases={
+                "tracking_no": [
+                    "business_context.business_objects.tracking_no",
+                    "integration_context.business_objects.tracking_no",
+                    "integration_context.tracking_no",
+                ],
+                "carrier_code": [
+                    "business_context.business_objects.carrier_code",
+                    "integration_context.business_objects.carrier_code",
+                    "integration_context.carrier_code",
+                ],
+            },
+        )
+
+
+class AccountLookupToolPlugin(AdapterBackedBusinessToolPlugin):
+    def __init__(self, adapter: BusinessAdapter) -> None:
+        super().__init__(
+            plugin_id="tool.account_lookup",
+            tool_name="account_lookup",
+            category="crm",
+            description="Query customer account profile.",
+            required_parameters=["account_id"],
+            optional_parameters=[],
+            suggested_context_keys=["customer_id", "account_id"],
+            adapter=adapter,
+            industry_scopes=["crm", "saas"],
+            parameter_aliases={
+                "account_id": [
+                    "business_context.business_objects.account_id",
+                    "integration_context.business_objects.account_id",
+                    "integration_context.account_id",
+                ]
+            },
+        )
+
+
+class SubscriptionLookupToolPlugin(AdapterBackedBusinessToolPlugin):
+    def __init__(self, adapter: BusinessAdapter) -> None:
+        super().__init__(
+            plugin_id="tool.subscription_lookup",
+            tool_name="subscription_lookup",
+            category="saas",
+            description="Query subscription and billing information.",
+            required_parameters=["subscription_id"],
+            optional_parameters=[],
+            suggested_context_keys=["organization_id", "subscription_id"],
+            adapter=adapter,
+            industry_scopes=["saas"],
+            parameter_aliases={
+                "subscription_id": [
+                    "business_context.business_objects.subscription_id",
+                    "integration_context.business_objects.subscription_id",
+                    "integration_context.subscription_id",
+                ]
+            },
+        )
+
+
+class TicketLookupToolPlugin(AdapterBackedBusinessToolPlugin):
+    def __init__(self, adapter: BusinessAdapter) -> None:
+        super().__init__(
+            plugin_id="tool.ticket_lookup",
+            tool_name="ticket_lookup",
+            category="service",
+            description="Query service ticket status.",
+            required_parameters=["ticket_id"],
+            optional_parameters=[],
+            suggested_context_keys=["organization_id", "ticket_id"],
+            adapter=adapter,
+            industry_scopes=["saas", "crm"],
+            parameter_aliases={
+                "ticket_id": [
+                    "business_context.business_objects.ticket_id",
+                    "integration_context.business_objects.ticket_id",
+                    "integration_context.ticket_id",
+                ]
+            },
+        )
+
+
+class CourseLookupToolPlugin(AdapterBackedBusinessToolPlugin):
+    def __init__(self, adapter: BusinessAdapter) -> None:
+        super().__init__(
+            plugin_id="tool.course_lookup",
+            tool_name="course_lookup",
+            category="education",
+            description="Query course information.",
+            required_parameters=["course_id"],
+            optional_parameters=[],
+            suggested_context_keys=["student_id", "course_id"],
+            adapter=adapter,
+            industry_scopes=["education"],
+            parameter_aliases={
+                "course_id": [
+                    "business_context.business_objects.course_id",
+                    "integration_context.business_objects.course_id",
+                    "integration_context.course_id",
+                ]
+            },
+        )
+
+
+class ProgressLookupToolPlugin(AdapterBackedBusinessToolPlugin):
+    def __init__(self, adapter: BusinessAdapter) -> None:
+        super().__init__(
+            plugin_id="tool.progress_lookup",
+            tool_name="progress_lookup",
+            category="education",
+            description="Query learning progress.",
+            required_parameters=["student_id"],
+            optional_parameters=["course_id"],
+            suggested_context_keys=["student_id", "course_id"],
+            adapter=adapter,
+            industry_scopes=["education"],
+            parameter_aliases={
+                "student_id": [
+                    "business_context.business_objects.student_id",
+                    "integration_context.business_objects.student_id",
+                    "integration_context.student_id",
+                ],
+                "course_id": [
+                    "business_context.business_objects.course_id",
+                    "integration_context.business_objects.course_id",
+                    "integration_context.course_id",
+                ],
+            },
+        )
+
+
+class WaybillLookupToolPlugin(AdapterBackedBusinessToolPlugin):
+    def __init__(self, adapter: BusinessAdapter) -> None:
+        super().__init__(
+            plugin_id="tool.waybill_lookup",
+            tool_name="waybill_lookup",
+            category="logistics",
+            description="Query waybill status.",
+            required_parameters=["waybill_id"],
+            optional_parameters=[],
+            suggested_context_keys=["waybill_id"],
+            adapter=adapter,
+            industry_scopes=["logistics"],
+            parameter_aliases={
+                "waybill_id": [
+                    "business_context.business_objects.waybill_id",
+                    "integration_context.business_objects.waybill_id",
+                    "integration_context.waybill_id",
+                ]
+            },
+        )
+
+
+class ClaimLookupToolPlugin(AdapterBackedBusinessToolPlugin):
+    def __init__(self, adapter: BusinessAdapter) -> None:
+        super().__init__(
+            plugin_id="tool.claim_lookup",
+            tool_name="claim_lookup",
+            category="logistics",
+            description="Query logistics claim status.",
+            required_parameters=["claim_id"],
+            optional_parameters=[],
+            suggested_context_keys=["claim_id"],
+            adapter=adapter,
+            industry_scopes=["logistics"],
+            parameter_aliases={
+                "claim_id": [
+                    "business_context.business_objects.claim_id",
+                    "integration_context.business_objects.claim_id",
+                    "integration_context.claim_id",
+                ]
+            },
+        )
+
+
+class CRMProfileToolPlugin(AdapterBackedBusinessToolPlugin):
+    def __init__(self, adapter: BusinessAdapter) -> None:
+        super().__init__(
+            plugin_id="tool.crm_profile",
+            tool_name="crm_profile",
+            category="crm",
+            description="Query CRM customer profile.",
+            required_parameters=["customer_id"],
+            optional_parameters=[],
+            suggested_context_keys=["customer_id"],
+            adapter=adapter,
+            industry_scopes=["crm"],
+            parameter_aliases={
+                "customer_id": [
+                    "business_context.business_objects.customer_id",
+                    "integration_context.business_objects.customer_id",
+                    "integration_context.customer_id",
+                ]
+            },
         )
 
 
@@ -375,23 +671,30 @@ class ConfiguredIndustryAdapterPlugin(IndustryAdapterPlugin):
         self,
         *,
         industry: str,
+        name: str | None = None,
         keywords: list[str],
         page_types: list[str],
         preferred_tools: list[str],
+        description: str = "",
+        knowledge_domains: list[str] | None = None,
+        extra_context: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(
             PluginDescriptor(
                 plugin_id=f"industry.{industry}",
-                name=f"{industry} adapter",
+                name=name or f"{industry} adapter",
                 kind=PluginKind.INDUSTRY_ADAPTER,
                 priority=400,
                 capabilities=[industry],
+                description=description,
             )
         )
         self._industry = industry
         self._keywords = keywords
         self._page_types = page_types
         self._preferred_tools = preferred_tools
+        self._knowledge_domains = knowledge_domains or [f"kb_{industry}"]
+        self._extra_context = extra_context or {}
 
     async def match_industry(self, context: PluginContext) -> IndustryMatchResult:
         integration_context = context.integration_context
@@ -401,7 +704,7 @@ class ConfiguredIndustryAdapterPlugin(IndustryAdapterPlugin):
                 matched=True,
                 industry=self._industry,
                 confidence=0.99,
-                context={"preferred_tools": self._preferred_tools},
+                context=self._build_match_context(),
             )
         page_type = (integration_context.get("page_context") or {}).get("page_type", "")
         if page_type in self._page_types:
@@ -409,7 +712,7 @@ class ConfiguredIndustryAdapterPlugin(IndustryAdapterPlugin):
                 matched=True,
                 industry=self._industry,
                 confidence=0.8,
-                context={"preferred_tools": self._preferred_tools},
+                context=self._build_match_context(),
             )
         text = f"{context.user_message or ''} {page_type}"
         if any(keyword in text for keyword in self._keywords):
@@ -417,7 +720,7 @@ class ConfiguredIndustryAdapterPlugin(IndustryAdapterPlugin):
                 matched=True,
                 industry=self._industry,
                 confidence=0.65,
-                context={"preferred_tools": self._preferred_tools},
+                context=self._build_match_context(),
             )
         return IndustryMatchResult()
 
@@ -426,9 +729,97 @@ class ConfiguredIndustryAdapterPlugin(IndustryAdapterPlugin):
             "industry": self._industry,
             "extra": {
                 "preferred_tools": self._preferred_tools,
-                "knowledge_domains": [f"kb_{self._industry}"],
+                "knowledge_domains": self._knowledge_domains,
+                **self._extra_context,
             },
         }
+
+    def _build_match_context(self) -> dict[str, Any]:
+        return {
+            "preferred_tools": self._preferred_tools,
+            "knowledge_domains": self._knowledge_domains,
+            **self._extra_context,
+        }
+
+
+class EcommerceIndustryPlugin(ConfiguredIndustryAdapterPlugin):
+    def __init__(self) -> None:
+        super().__init__(
+            industry="ecommerce",
+            name="Ecommerce Industry Plugin",
+            keywords=["订单", "售后", "发货", "物流", "优惠券"],
+            page_types=["product_detail", "order_detail", "after_sale_detail"],
+            preferred_tools=["order_status", "after_sale_status", "logistics_tracking"],
+            description="Built-in industry adapter for ecommerce customer service scenarios.",
+            extra_context={
+                "domain_focus": ["order", "fulfillment", "after_sale"],
+                "default_object_keys": ["order_id", "after_sale_id", "tracking_no"],
+            },
+        )
+
+
+class SaaSIndustryPlugin(ConfiguredIndustryAdapterPlugin):
+    def __init__(self) -> None:
+        super().__init__(
+            industry="saas",
+            name="SaaS Industry Plugin",
+            keywords=["套餐", "订阅", "权限", "组织", "账单"],
+            page_types=["billing", "organization", "permission"],
+            preferred_tools=["account_lookup", "subscription_lookup", "ticket_lookup"],
+            description="Built-in industry adapter for SaaS account, billing, and support flows.",
+            extra_context={
+                "domain_focus": ["subscription", "organization", "permission"],
+                "default_object_keys": ["account_id", "subscription_id", "ticket_id"],
+            },
+        )
+
+
+class EducationIndustryPlugin(ConfiguredIndustryAdapterPlugin):
+    def __init__(self) -> None:
+        super().__init__(
+            industry="education",
+            name="Education Industry Plugin",
+            keywords=["课程", "班级", "学习", "考试", "证书"],
+            page_types=["course_detail", "learning", "exam"],
+            preferred_tools=["course_lookup", "progress_lookup"],
+            description="Built-in industry adapter for course, exam, and learning progress flows.",
+            extra_context={
+                "domain_focus": ["course", "learning", "exam"],
+                "default_object_keys": ["course_id", "student_id"],
+            },
+        )
+
+
+class LogisticsIndustryPlugin(ConfiguredIndustryAdapterPlugin):
+    def __init__(self) -> None:
+        super().__init__(
+            industry="logistics",
+            name="Logistics Industry Plugin",
+            keywords=["运单", "签收", "揽收", "赔付", "配送"],
+            page_types=["tracking", "claim"],
+            preferred_tools=["waybill_lookup", "claim_lookup", "logistics_tracking"],
+            description="Built-in industry adapter for delivery tracking and claims.",
+            extra_context={
+                "domain_focus": ["delivery", "tracking", "claim"],
+                "default_object_keys": ["waybill_id", "claim_id", "tracking_no"],
+            },
+        )
+
+
+class CRMIndustryPlugin(ConfiguredIndustryAdapterPlugin):
+    def __init__(self) -> None:
+        super().__init__(
+            industry="crm",
+            name="CRM Industry Plugin",
+            keywords=["客户", "服务记录", "工单", "服务等级"],
+            page_types=["customer_profile", "service_ticket"],
+            preferred_tools=["crm_profile", "ticket_lookup", "account_lookup"],
+            description="Built-in industry adapter for CRM profile and service workflows.",
+            extra_context={
+                "domain_focus": ["customer", "service", "ticket"],
+                "default_object_keys": ["customer_id", "ticket_id", "account_id"],
+            },
+        )
 
 
 class PageContextEnricherPlugin(ContextEnricherPlugin):
@@ -485,6 +876,51 @@ class UserProfileEnricherPlugin(ContextEnricherPlugin):
                 "roles": host_auth.roles,
                 "permissions": host_auth.permissions,
                 "source_system": host_auth.source_system,
+            }
+        }
+
+
+class BehaviorSignalsEnricherPlugin(ContextEnricherPlugin):
+    def __init__(self) -> None:
+        super().__init__(
+            PluginDescriptor(
+                plugin_id="context.behavior_signals",
+                name="Behavior Signals Enricher",
+                kind=PluginKind.CONTEXT_ENRICHER,
+                priority=240,
+                capabilities=["behavior_signals"],
+            )
+        )
+
+    async def enrich(self, context: PluginContext) -> dict[str, Any]:
+        return {"behavior_signals": context.integration_context.get("behavior_signals", {})}
+
+
+class SessionInsightsEnricherPlugin(ContextEnricherPlugin):
+    def __init__(self) -> None:
+        super().__init__(
+            PluginDescriptor(
+                plugin_id="context.session_insights",
+                name="Session Insights Enricher",
+                kind=PluginKind.CONTEXT_ENRICHER,
+                priority=220,
+                capabilities=["session_insights"],
+            )
+        )
+
+    async def enrich(self, context: PluginContext) -> dict[str, Any]:
+        business_context = context.business_context
+        if not business_context:
+            return {}
+        messages = getattr(business_context, "session_summary", "")
+        return {
+            "extra": {
+                "session_insights": {
+                    "has_summary": bool(messages),
+                    "summary": messages,
+                    "permissions": list(business_context.permissions),
+                    "channel": business_context.channel,
+                }
             }
         }
 
@@ -570,9 +1006,17 @@ class RouteDecisionHandoffPlugin(HumanHandoffPlugin):
 
     async def evaluate(self, context: PluginContext) -> HandoffDecision:
         if context.response.get("requires_handoff"):
-            return HandoffDecision(should_handoff=True, reason=context.response.get("reason", ""), priority=300)
+            return HandoffDecision(
+                should_handoff=True,
+                reason=context.response.get("reason", ""),
+                priority=300,
+            )
         if context.route in {RouteType.HANDOFF.value, RouteType.RISK.value}:
-            return HandoffDecision(should_handoff=True, reason=context.response.get("reason", ""), priority=280)
+            return HandoffDecision(
+                should_handoff=True,
+                reason=context.response.get("reason", ""),
+                priority=280,
+            )
         return HandoffDecision()
 
 
@@ -616,7 +1060,11 @@ class DefaultSummaryHandoffPlugin(HumanHandoffPlugin):
     async def build_package(self, session: Session, reason: str) -> HandoffPackage | None:
         history = session.messages[-10:]
         user_messages = [message.content for message in history if message.role == MessageRole.USER]
-        intent = user_messages[-1] if user_messages else zh("\\u7528\\u6237\\u9700\\u8981\\u4eba\\u5de5")
+        intent = (
+            user_messages[-1]
+            if user_messages
+            else zh("\\u7528\\u6237\\u9700\\u8981\\u4eba\\u5de5")
+        )
         summary = " | ".join(message.content for message in history[-6:])
         return HandoffPackage(
             tenant_id=session.tenant_id,
@@ -642,127 +1090,17 @@ def build_builtin_plugins(
         BusinessIntentRoutePlugin(runtime_config),
         KnowledgeQuestionRoutePlugin(),
         FallbackRoutePlugin(),
-        AdapterBackedBusinessToolPlugin(
-            plugin_id="tool.order_status",
-            tool_name="order_status",
-            category="ecommerce",
-            description="Query order fulfillment and payment status.",
-            required_parameters=["order_id"],
-            optional_parameters=[],
-            suggested_context_keys=["shop_id", "customer_id", "order_id"],
-            adapter=adapter,
-            industry_scopes=["ecommerce"],
-        ),
-        AdapterBackedBusinessToolPlugin(
-            plugin_id="tool.after_sale_status",
-            tool_name="after_sale_status",
-            category="ecommerce",
-            description="Query refund and after-sale status.",
-            required_parameters=["after_sale_id"],
-            optional_parameters=[],
-            suggested_context_keys=["shop_id", "customer_id", "after_sale_id"],
-            adapter=adapter,
-            industry_scopes=["ecommerce"],
-        ),
-        AdapterBackedBusinessToolPlugin(
-            plugin_id="tool.logistics_tracking",
-            tool_name="logistics_tracking",
-            category="ecommerce",
-            description="Query logistics tracking.",
-            required_parameters=["tracking_no"],
-            optional_parameters=["carrier_code"],
-            suggested_context_keys=["shop_id", "tracking_no"],
-            adapter=adapter,
-            industry_scopes=["ecommerce", "logistics"],
-        ),
-        AdapterBackedBusinessToolPlugin(
-            plugin_id="tool.account_lookup",
-            tool_name="account_lookup",
-            category="crm",
-            description="Query customer account profile.",
-            required_parameters=["account_id"],
-            optional_parameters=[],
-            suggested_context_keys=["customer_id", "account_id"],
-            adapter=adapter,
-            industry_scopes=["crm", "saas"],
-        ),
-        AdapterBackedBusinessToolPlugin(
-            plugin_id="tool.subscription_lookup",
-            tool_name="subscription_lookup",
-            category="saas",
-            description="Query subscription and billing information.",
-            required_parameters=["subscription_id"],
-            optional_parameters=[],
-            suggested_context_keys=["organization_id", "subscription_id"],
-            adapter=adapter,
-            industry_scopes=["saas"],
-        ),
-        AdapterBackedBusinessToolPlugin(
-            plugin_id="tool.ticket_lookup",
-            tool_name="ticket_lookup",
-            category="service",
-            description="Query service ticket status.",
-            required_parameters=["ticket_id"],
-            optional_parameters=[],
-            suggested_context_keys=["organization_id", "ticket_id"],
-            adapter=adapter,
-            industry_scopes=["saas", "crm"],
-        ),
-        AdapterBackedBusinessToolPlugin(
-            plugin_id="tool.course_lookup",
-            tool_name="course_lookup",
-            category="education",
-            description="Query course information.",
-            required_parameters=["course_id"],
-            optional_parameters=[],
-            suggested_context_keys=["student_id", "course_id"],
-            adapter=adapter,
-            industry_scopes=["education"],
-        ),
-        AdapterBackedBusinessToolPlugin(
-            plugin_id="tool.progress_lookup",
-            tool_name="progress_lookup",
-            category="education",
-            description="Query learning progress.",
-            required_parameters=["student_id"],
-            optional_parameters=["course_id"],
-            suggested_context_keys=["student_id", "course_id"],
-            adapter=adapter,
-            industry_scopes=["education"],
-        ),
-        AdapterBackedBusinessToolPlugin(
-            plugin_id="tool.waybill_lookup",
-            tool_name="waybill_lookup",
-            category="logistics",
-            description="Query waybill status.",
-            required_parameters=["waybill_id"],
-            optional_parameters=[],
-            suggested_context_keys=["waybill_id"],
-            adapter=adapter,
-            industry_scopes=["logistics"],
-        ),
-        AdapterBackedBusinessToolPlugin(
-            plugin_id="tool.claim_lookup",
-            tool_name="claim_lookup",
-            category="logistics",
-            description="Query logistics claim status.",
-            required_parameters=["claim_id"],
-            optional_parameters=[],
-            suggested_context_keys=["claim_id"],
-            adapter=adapter,
-            industry_scopes=["logistics"],
-        ),
-        AdapterBackedBusinessToolPlugin(
-            plugin_id="tool.crm_profile",
-            tool_name="crm_profile",
-            category="crm",
-            description="Query CRM customer profile.",
-            required_parameters=["customer_id"],
-            optional_parameters=[],
-            suggested_context_keys=["customer_id"],
-            adapter=adapter,
-            industry_scopes=["crm"],
-        ),
+        OrderStatusToolPlugin(adapter),
+        AfterSaleStatusToolPlugin(adapter),
+        LogisticsTrackingToolPlugin(adapter),
+        AccountLookupToolPlugin(adapter),
+        SubscriptionLookupToolPlugin(adapter),
+        TicketLookupToolPlugin(adapter),
+        CourseLookupToolPlugin(adapter),
+        ProgressLookupToolPlugin(adapter),
+        WaybillLookupToolPlugin(adapter),
+        ClaimLookupToolPlugin(adapter),
+        CRMProfileToolPlugin(adapter),
         ConfiguredIndustryAdapterPlugin(
             industry="ecommerce",
             keywords=["订单", "售后", "发货", "物流", "优惠券"],
@@ -793,9 +1131,16 @@ def build_builtin_plugins(
             page_types=["customer_profile", "service_ticket"],
             preferred_tools=["crm_profile", "ticket_lookup", "account_lookup"],
         ),
+        EcommerceIndustryPlugin(),
+        SaaSIndustryPlugin(),
+        EducationIndustryPlugin(),
+        LogisticsIndustryPlugin(),
+        CRMIndustryPlugin(),
         PageContextEnricherPlugin(),
         BusinessObjectEnricherPlugin(),
         UserProfileEnricherPlugin(),
+        BehaviorSignalsEnricherPlugin(),
+        SessionInsightsEnricherPlugin(),
         RouteDecisionHandoffPlugin(),
         ConfidenceHandoffPlugin(runtime_config),
         DefaultSummaryHandoffPlugin(),
@@ -853,6 +1198,21 @@ def merge_context_payload(target: dict[str, Any], payload: dict[str, Any]) -> di
         else:
             result[key] = value
     return result
+
+
+def _lookup_context_alias(context: PluginContext, alias: str) -> Any:
+    current: Any = context
+    for segment in alias.split("."):
+        if current is None:
+            return None
+        if hasattr(current, segment):
+            current = getattr(current, segment)
+            continue
+        if isinstance(current, dict):
+            current = current.get(segment)
+            continue
+        return None
+    return current
 
 
 def _scope_match(scopes: list[str], candidate: str | None) -> bool:

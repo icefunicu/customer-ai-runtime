@@ -20,7 +20,11 @@ class IndustryService:
     def __init__(self, registry: PluginRegistry) -> None:
         self._registry = registry
 
-    async def detect(self, context: BusinessContext, user_message: str | None = None) -> IndustryMatchResult:
+    async def detect(
+        self,
+        context: BusinessContext,
+        user_message: str | None = None,
+    ) -> IndustryMatchResult:
         plugin_context = context_to_plugin_context(
             tenant_id=context.tenant_id,
             channel=context.channel,
@@ -31,7 +35,11 @@ class IndustryService:
             host_auth_context=context.host_auth_context,
             business_context=context,
         )
-        best = IndustryMatchResult(industry=context.industry, matched=bool(context.industry), confidence=0.99)
+        best = IndustryMatchResult(
+            industry=context.industry,
+            matched=bool(context.industry),
+            confidence=0.99 if context.industry else 0.0,
+        )
         for plugin in self._registry.resolve(
             PluginKind.INDUSTRY_ADAPTER,
             tenant_id=context.tenant_id,
@@ -130,7 +138,12 @@ class KnowledgeDomainManager:
     def __init__(self, domain_map: dict[str, object]) -> None:
         self._domain_map = domain_map
 
-    def resolve_primary(self, tenant_id: str, industry: str | None, explicit: str | None) -> str | None:
+    def resolve_primary(
+        self,
+        tenant_id: str,
+        industry: str | None,
+        explicit: str | None,
+    ) -> str | None:
         if explicit:
             return explicit
         tenant_mapping = self._domain_map.get(tenant_id, {})

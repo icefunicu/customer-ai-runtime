@@ -31,18 +31,28 @@ class ToolCatalogService:
         return items
 
     def get(self, tool_name: str) -> dict[str, Any]:
+        plugin = self.get_plugin(tool_name)
+        if plugin is not None:
+            return {
+                "name": plugin.tool_name,
+                "category": plugin.category,
+                "description": plugin.description,
+                "required_parameters": plugin.required_parameters,
+                "optional_parameters": plugin.optional_parameters,
+                "suggested_context_keys": plugin.suggested_context_keys,
+                "plugin_id": plugin.descriptor.plugin_id,
+            }
+        raise AppError(
+            code="validation_error",
+            message=f"不支持的工具：{tool_name}",
+            status_code=400,
+        )
+
+    def get_plugin(self, tool_name: str) -> BusinessToolPlugin | None:
         for plugin in self._registry.plugins(PluginKind.BUSINESS_TOOL):
             if isinstance(plugin, BusinessToolPlugin) and plugin.tool_name == tool_name:
-                return {
-                    "name": plugin.tool_name,
-                    "category": plugin.category,
-                    "description": plugin.description,
-                    "required_parameters": plugin.required_parameters,
-                    "optional_parameters": plugin.optional_parameters,
-                    "suggested_context_keys": plugin.suggested_context_keys,
-                    "plugin_id": plugin.descriptor.plugin_id,
-                }
-        raise AppError(code="validation_error", message=f"不支持的工具：{tool_name}", status_code=400)
+                return plugin
+        return None
 
     def validate_parameters(self, tool_name: str, parameters: dict[str, Any]) -> list[str]:
         definition = self.get(tool_name)
