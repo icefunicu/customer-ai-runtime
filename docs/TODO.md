@@ -110,16 +110,17 @@
 
 **价值**：量化服务质量，识别低质量会话进行运营分析
 
-#### 2.2.2 会话解决状态标记
+#### 2.2.2 会话解决状态标记 ✅ 已完成（2026-03-12）
 
 **需求描述**：
 区分会话是已解决、未解决还是已升级，为模型优化提供数据反馈。
 
-**实现要点**：
-- 增加`resolution_status`枚举（resolved/unresolved/escalated）
-- 在会话关闭时记录解决状态
-- 支持人工客服标记会话解决状态
-- 统计各路由类型的解决率
+**已落地实现**：
+- 增加`resolution_status`枚举（`resolved` / `unresolved` / `escalated`）
+- 会话关闭接口支持提交`resolution_status`
+- 会话详情保留`resolution_status`与`resolution_marked_at`
+- 管理端指标汇总新增`resolution_summary`
+- 解决状态提交会写入诊断事件，便于后续效果分析
 
 **价值**：为模型优化提供标注数据，识别AI能力薄弱环节
 

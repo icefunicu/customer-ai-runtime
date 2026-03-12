@@ -225,6 +225,45 @@ def test_close_session_can_record_satisfaction_score(client: TestClient) -> None
     assert satisfaction_summary["distribution"]["5"] == 1
 
 
+def test_close_session_can_record_resolution_status(client: TestClient) -> None:
+    chat = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "我要转人工客服",
+        },
+    )
+    assert chat.status_code == 200
+    session_id = chat.json()["data"]["session_id"]
+
+    close = client.post(
+        f"/api/v1/sessions/{session_id}/close",
+        headers=ADMIN_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "admin",
+            "resolution_status": "escalated",
+        },
+    )
+    assert close.status_code == 200
+    close_data = close.json()["data"]
+    assert close_data["state"] == "closed"
+    assert close_data["resolution_status"] == "escalated"
+    assert close_data["resolution_marked_at"] is not None
+
+    summary = client.get(
+        "/api/v1/admin/metrics/summary",
+        headers=ADMIN_HEADERS,
+        params={"tenant_id": "demo-tenant"},
+    )
+    assert summary.status_code == 200
+    resolution_summary = summary.json()["data"]["resolution_summary"]
+    assert resolution_summary["marked_sessions"] == 1
+    assert resolution_summary["distribution"]["escalated"] == 1
+
+
 def test_voice_turn_flow(client: TestClient) -> None:
     transcript = "\u8ba2\u5355 ORD-1001 \u53d1\u8d27\u4e86\u5417"
     response = client.post(

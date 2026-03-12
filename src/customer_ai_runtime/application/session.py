@@ -8,6 +8,7 @@ from customer_ai_runtime.domain.models import (
     IntentFrame,
     Message,
     MessageRole,
+    ResolutionStatus,
     RouteDecision,
     Session,
     SessionState,
@@ -134,6 +135,7 @@ class SessionService:
         tenant_id: str,
         session_id: str,
         satisfaction_score: int | None = None,
+        resolution_status: ResolutionStatus | None = None,
     ) -> Session:
         session = self.get(tenant_id, session_id)
         session.state = SessionState.CLOSED
@@ -149,6 +151,19 @@ class SessionService:
                     "tenant_id": tenant_id,
                     "session_id": session_id,
                     "satisfaction_score": satisfaction_score,
+                },
+            )
+        if resolution_status is not None:
+            session.resolution_status = resolution_status
+            session.resolution_marked_at = utcnow()
+            self._diagnostics.record(
+                level=DiagnosticLevel.INFO,
+                code="session.resolution_recorded",
+                message="session resolution status recorded",
+                context={
+                    "tenant_id": tenant_id,
+                    "session_id": session_id,
+                    "resolution_status": resolution_status,
                 },
             )
         return self.save(session)

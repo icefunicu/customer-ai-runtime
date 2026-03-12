@@ -4,6 +4,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from customer_ai_runtime.domain.models import ResolutionStatus
+
 ChannelType = Literal["web", "app", "h5", "mini_program", "app_voice", "rtc", "admin"]
 
 
@@ -18,6 +20,7 @@ class SessionCreateRequest(TenantScopedRequest):
 class SessionCloseRequest(TenantScopedRequest):
     channel: ChannelType = "admin"
     satisfaction_score: int | None = Field(default=None, ge=1, le=5)
+    resolution_status: ResolutionStatus | None = None
 
 
 class ChatMessageRequest(TenantScopedRequest):

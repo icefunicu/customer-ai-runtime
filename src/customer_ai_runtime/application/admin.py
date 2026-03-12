@@ -62,6 +62,12 @@ class AdminService:
         satisfaction_distribution = Counter(
             str(session.satisfaction_score) for session in rated_sessions if session.satisfaction_score is not None
         )
+        resolved_sessions = [session for session in sessions if session.resolution_status is not None]
+        resolution_distribution = Counter(
+            session.resolution_status.value
+            for session in resolved_sessions
+            if session.resolution_status is not None
+        )
         average_satisfaction = None
         if rated_sessions:
             average_satisfaction = round(
@@ -82,6 +88,10 @@ class AdminService:
                 "rated_sessions": len(rated_sessions),
                 "average_score": average_satisfaction,
                 "distribution": dict(satisfaction_distribution),
+            },
+            "resolution_summary": {
+                "marked_sessions": len(resolved_sessions),
+                "distribution": dict(resolution_distribution),
             },
             "diagnostic_summary": {
                 "sample_size": len(diagnostics),

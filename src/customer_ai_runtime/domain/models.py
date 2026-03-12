@@ -40,6 +40,12 @@ class SessionState(str, Enum):
     CLOSED = "closed"
 
 
+class ResolutionStatus(str, Enum):
+    RESOLVED = "resolved"
+    UNRESOLVED = "unresolved"
+    ESCALATED = "escalated"
+
+
 class RouteType(str, Enum):
     KNOWLEDGE = "knowledge"
     BUSINESS = "business"
@@ -100,6 +106,8 @@ class Session(BaseModel):
     waiting_human: bool = False
     satisfaction_score: int | None = Field(default=None, ge=1, le=5)
     satisfaction_submitted_at: datetime | None = None
+    resolution_status: ResolutionStatus | None = None
+    resolution_marked_at: datetime | None = None
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 

@@ -207,6 +207,7 @@ async def close_session(
         payload.tenant_id,
         session_id,
         satisfaction_score=payload.satisfaction_score,
+        resolution_status=payload.resolution_status,
     )
     return success_response(result.model_dump(mode="json"))
 

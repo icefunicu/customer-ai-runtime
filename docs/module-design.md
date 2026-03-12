@@ -60,6 +60,8 @@
 - `last_route`
 - `last_intent`
 - `intent_stack`
+- `satisfaction_score`
+- `resolution_status`
 
 ### 状态机
 
