@@ -68,6 +68,17 @@ class AdminService:
             for session in resolved_sessions
             if session.resolution_status is not None
         )
+        feedback_messages = [
+            message
+            for session in sessions
+            for message in session.messages
+            if message.feedback_type is not None
+        ]
+        feedback_distribution = Counter(
+            message.feedback_type.value
+            for message in feedback_messages
+            if message.feedback_type is not None
+        )
         average_satisfaction = None
         if rated_sessions:
             average_satisfaction = round(
@@ -109,6 +120,10 @@ class AdminService:
             "resolution_summary": {
                 "marked_sessions": len(resolved_sessions),
                 "distribution": dict(resolution_distribution),
+            },
+            "feedback_summary": {
+                "feedback_count": len(feedback_messages),
+                "distribution": dict(feedback_distribution),
             },
             "response_time_summary": {
                 "tracked_sessions": len(tracked_sessions),
@@ -197,6 +212,58 @@ class AdminService:
             knowledge_base.model_dump(mode="json")
             for knowledge_base in self.knowledge_service.list_knowledge_bases(tenant_id)
         ]
+
+    def get_knowledge_health_report(self, tenant_id: str, knowledge_base_id: str) -> dict[str, Any]:
+        return self.knowledge_service.health_report(tenant_id, knowledge_base_id)
+
+    def get_retrieval_miss_report(
+        self,
+        *,
+        tenant_id: str,
+        knowledge_base_id: str | None = None,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        events = self.diagnostics_service.query(
+            tenant_id=tenant_id,
+            level=None,
+            code_prefix="knowledge.retrieve_miss",
+            limit=200,
+        )
+        filtered_events = [
+            event
+            for event in events
+            if knowledge_base_id is None
+            or str(event.context.get("knowledge_base_id")) == knowledge_base_id
+        ]
+        counts: Counter[str] = Counter()
+        samples: dict[str, dict[str, Any]] = {}
+        for event in filtered_events:
+            query = str(event.context.get("query") or "").strip()
+            if not query:
+                continue
+            counts[query] += 1
+            samples.setdefault(
+                query,
+                {
+                    "knowledge_base_id": event.context.get("knowledge_base_id"),
+                    "top_score": event.context.get("top_score"),
+                    "channel": event.context.get("channel"),
+                },
+            )
+        top_queries = [
+            {
+                "query": query,
+                "count": count,
+                **samples.get(query, {}),
+            }
+            for query, count in counts.most_common(limit)
+        ]
+        return {
+            "tenant_id": tenant_id,
+            "knowledge_base_id": knowledge_base_id,
+            "miss_count": sum(counts.values()),
+            "top_queries": top_queries,
+        }
 
     def list_rooms(self, tenant_id: str) -> list[dict[str, Any]]:
         return [room.model_dump(mode="json") for room in self.rtc_service.list_rooms(tenant_id)]

@@ -132,6 +132,21 @@ class ChatService:
                 filtered_citations = [
                     citation for citation in citations if citation.score >= policies.knowledge_min_score
                 ]
+                if not filtered_citations:
+                    top_score = None if not citations else round(citations[0].score, 4)
+                    self.diagnostics.record(
+                        DiagnosticLevel.WARNING,
+                        "knowledge.retrieve_miss",
+                        "knowledge retrieval missed effective citations",
+                        {
+                            "tenant_id": tenant_id,
+                            "session_id": session.session_id,
+                            "channel": channel,
+                            "knowledge_base_id": knowledge_base_id,
+                            "query": message,
+                            "top_score": top_score,
+                        },
+                    )
                 citations = filtered_citations or citations[:1]
                 self.diagnostics.record(
                     DiagnosticLevel.INFO,

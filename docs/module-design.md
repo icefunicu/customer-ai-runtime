@@ -32,6 +32,7 @@
 - `Session`
 - `IntentFrame`
 - `Message`
+- `MessageFeedbackType`
 - `RouteDecision`
 - `KnowledgeBase`
 - `KnowledgeDocument`
@@ -64,6 +65,7 @@
 - `resolution_status`
 - `first_response_time`
 - `avg_response_time`
+- 消息级 `feedback_type` / `feedback_comment` / `feedback_submitted_at`
 
 ### 状态机
 
@@ -134,6 +136,8 @@
 - 向量库适配层
 - 知识域管理器
 - 不同行业可使用不同知识域组合
+- `KnowledgeService` 额外提供知识库健康报告，用于输出文档数、切片数、重复切片率、空文档数与健康分
+- 当检索后没有有效引用时，写入 `knowledge.retrieve_miss` 诊断事件，供管理端聚合知识缺口
 
 ## 6. 业务工具模块
 
@@ -278,6 +282,7 @@
 ### Knowledge Domain Manager
 
 - 维护 `tenant_id + industry + scenario -> knowledge domains`
+- 管理端可基于知识域对应的知识库查看健康报告与检索失败聚合
 
 ### Real-time Business Data Provider
 
@@ -299,8 +304,17 @@
 - Policy
 - Metrics
 - Diagnostics
+- Knowledge health report
+- Retrieval miss report
 - Plugin 状态
 - Provider 健康状态
+
+### 当前统计摘要
+
+- `satisfaction_summary`
+- `resolution_summary`
+- `feedback_summary`
+- `response_time_summary`
 
 ### 失败方式
 

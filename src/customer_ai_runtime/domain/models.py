@@ -33,6 +33,12 @@ class MessageRole(str, Enum):
     SYSTEM = "system"
 
 
+class MessageFeedbackType(str, Enum):
+    UPVOTE = "upvote"
+    DOWNVOTE = "downvote"
+    REQUEST_HUMAN = "request_human"
+
+
 class SessionState(str, Enum):
     ACTIVE = "active"
     WAITING_HUMAN = "waiting_human"
@@ -77,6 +83,9 @@ class Message(BaseModel):
     content: str
     created_at: datetime = Field(default_factory=utcnow)
     metadata: dict[str, Any] = Field(default_factory=dict)
+    feedback_type: MessageFeedbackType | None = None
+    feedback_comment: str | None = None
+    feedback_submitted_at: datetime | None = None
 
 
 class IntentFrame(BaseModel):

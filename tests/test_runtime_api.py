@@ -185,6 +185,103 @@ def test_handoff_flow(client: TestClient) -> None:
     assert close.json()["data"]["state"] == "closed"
 
 
+def test_message_feedback_records_upvote_and_updates_summary(client: TestClient) -> None:
+    chat = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "我的订单 ORD-1001 发货了吗",
+        },
+    )
+    assert chat.status_code == 200
+    session_id = chat.json()["data"]["session_id"]
+
+    messages = client.get(
+        f"/api/v1/sessions/{session_id}/messages",
+        headers=CUSTOMER_HEADERS,
+        params={"tenant_id": "demo-tenant"},
+    )
+    assert messages.status_code == 200
+    assistant_message = next(item for item in messages.json()["data"] if item["role"] == "assistant")
+
+    feedback = client.post(
+        f"/api/v1/sessions/{session_id}/messages/{assistant_message['message_id']}/feedback",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "feedback_type": "upvote",
+            "comment": "这个回答有帮助",
+        },
+    )
+    assert feedback.status_code == 200
+    feedback_data = feedback.json()["data"]
+    assert feedback_data["message"]["feedback_type"] == "upvote"
+    assert feedback_data["message"]["feedback_comment"] == "这个回答有帮助"
+    assert feedback_data["message"]["feedback_submitted_at"] is not None
+
+    summary = client.get(
+        "/api/v1/admin/metrics/summary",
+        headers=ADMIN_HEADERS,
+        params={"tenant_id": "demo-tenant"},
+    )
+    assert summary.status_code == 200
+    feedback_summary = summary.json()["data"]["feedback_summary"]
+    assert feedback_summary["feedback_count"] == 1
+    assert feedback_summary["distribution"]["upvote"] == 1
+
+
+def test_message_feedback_can_request_human_handoff(client: TestClient) -> None:
+    chat = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "退款规则是什么？",
+            "knowledge_base_id": "kb_support",
+        },
+    )
+    if chat.status_code != 200:
+        seed_knowledge_base(client)
+        chat = client.post(
+            "/api/v1/chat/messages",
+            headers=CUSTOMER_HEADERS,
+            json={
+                "tenant_id": "demo-tenant",
+                "channel": "web",
+                "message": "退款规则是什么？",
+                "knowledge_base_id": "kb_support",
+            },
+        )
+    assert chat.status_code == 200
+    session_id = chat.json()["data"]["session_id"]
+
+    messages = client.get(
+        f"/api/v1/sessions/{session_id}/messages",
+        headers=CUSTOMER_HEADERS,
+        params={"tenant_id": "demo-tenant"},
+    )
+    assert messages.status_code == 200
+    assistant_message = next(item for item in messages.json()["data"] if item["role"] == "assistant")
+
+    feedback = client.post(
+        f"/api/v1/sessions/{session_id}/messages/{assistant_message['message_id']}/feedback",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "feedback_type": "request_human",
+            "comment": "这个回答没解决问题，请转人工",
+        },
+    )
+    assert feedback.status_code == 200
+    feedback_data = feedback.json()["data"]
+    assert feedback_data["message"]["feedback_type"] == "request_human"
+    assert feedback_data["session"]["state"] == "waiting_human"
+    assert feedback_data["handoff"] is not None
+
+
 def test_close_session_can_record_satisfaction_score(client: TestClient) -> None:
     chat = client.post(
         "/api/v1/chat/messages",
@@ -477,6 +574,54 @@ def test_admin_room_and_knowledge_listing(client: TestClient) -> None:
     diagnostics = client.get("/api/v1/admin/diagnostics", headers=ADMIN_HEADERS)
     assert diagnostics.status_code == 200
     assert diagnostics.json()["data"]
+
+
+def test_admin_knowledge_health_report(client: TestClient) -> None:
+    seed_knowledge_base(client)
+    report = client.get(
+        "/api/v1/admin/knowledge-bases/kb_support/health",
+        headers=ADMIN_HEADERS,
+        params={"tenant_id": "demo-tenant"},
+    )
+    assert report.status_code == 200
+    data = report.json()["data"]
+    assert data["knowledge_base_id"] == "kb_support"
+    assert data["document_count"] >= 1
+    assert data["chunk_count"] >= 1
+    assert data["health_score"] >= 0
+
+
+def test_admin_retrieval_miss_report(client: TestClient) -> None:
+    seed_knowledge_base(client)
+    policy_update = client.put(
+        "/api/v1/admin/policies",
+        headers=ADMIN_HEADERS,
+        json={"knowledge_min_score": 0.99},
+    )
+    assert policy_update.status_code == 200
+
+    chat = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "宇宙尽头在哪里？",
+            "knowledge_base_id": "kb_support",
+        },
+    )
+    assert chat.status_code == 200
+
+    report = client.get(
+        "/api/v1/admin/knowledge/retrieval-misses",
+        headers=ADMIN_HEADERS,
+        params={"tenant_id": "demo-tenant", "knowledge_base_id": "kb_support"},
+    )
+    assert report.status_code == 200
+    data = report.json()["data"]
+    assert data["knowledge_base_id"] == "kb_support"
+    assert data["miss_count"] >= 1
+    assert any(item["query"] == "宇宙尽头在哪里？" for item in data["top_queries"])
 
 
 def test_admin_session_monitor_and_diagnostics_filters(client: TestClient) -> None:

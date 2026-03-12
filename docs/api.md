@@ -92,6 +92,7 @@
 ### `GET /api/v1/sessions/{session_id}/messages?tenant_id=demo-tenant`
 
 - 用途：查询会话消息历史
+- 返回重点：消息包含 `feedback_type`、`feedback_comment`、`feedback_submitted_at`
 
 ### `POST /api/v1/sessions/{session_id}/claim-human`
 
@@ -100,6 +101,16 @@
 ### `POST /api/v1/sessions/{session_id}/messages/human`
 
 - 用途：人工写入回复
+
+### `POST /api/v1/sessions/{session_id}/messages/{message_id}/feedback`
+
+- 用途：提交消息级反馈
+- 支持字段：`feedback_type`（`upvote` / `downvote` / `request_human`）
+- 支持字段：`comment`（可选，最长 1000 字符）
+- 返回重点：
+  - `message`
+  - `session`
+  - `handoff`（仅 `request_human` 时返回）
 
 ### `POST /api/v1/sessions/{session_id}/close`
 
@@ -283,6 +294,7 @@
 - 返回重点：
   - `satisfaction_summary`
   - `resolution_summary`
+  - `feedback_summary`
   - `response_time_summary`
 
 ### `GET /api/v1/admin/sessions?tenant_id=demo-tenant`
@@ -342,6 +354,30 @@
 - `limit`
 
 ### `GET /api/v1/admin/rooms?tenant_id=demo-tenant`
+
+### `GET /api/v1/admin/knowledge-bases/{knowledge_base_id}/health`
+
+- 用途：查看单个知识库健康报告
+- 可选查询参数：
+  - `tenant_id`
+- 返回重点：
+  - `document_count`
+  - `chunk_count`
+  - `average_chunk_length`
+  - `duplicate_chunk_ratio`
+  - `empty_document_count`
+  - `health_score`
+
+### `GET /api/v1/admin/knowledge/retrieval-misses`
+
+- 用途：查看知识检索未命中聚合报告
+- 可选查询参数：
+  - `tenant_id`
+  - `knowledge_base_id`
+  - `limit`
+- 返回重点：
+  - `miss_count`
+  - `top_queries`
 
 ### `GET /api/v1/admin/providers/health`
 

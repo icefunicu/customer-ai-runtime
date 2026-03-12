@@ -125,3 +125,40 @@ class KnowledgeService:
             fallback_chunks = self._repository.list_chunks(tenant_id, knowledge_base_id)[:top_k]
             hits = [SimpleNamespace(chunk=chunk, score=0.1) for chunk in fallback_chunks]
         return citations_from_hits(hits)
+
+    def health_report(self, tenant_id: str, knowledge_base_id: str) -> dict[str, Any]:
+        knowledge_base = self.get_knowledge_base(tenant_id, knowledge_base_id)
+        documents = self._repository.list_documents(tenant_id, knowledge_base_id)
+        chunks = self._repository.list_chunks(tenant_id, knowledge_base_id)
+        chunk_lengths = [len(chunk.content.strip()) for chunk in chunks if chunk.content.strip()]
+        normalized_chunks = [
+            " ".join(chunk.content.split()).strip().lower()
+            for chunk in chunks
+            if chunk.content.strip()
+        ]
+        duplicate_count = len(normalized_chunks) - len(set(normalized_chunks))
+        duplicate_ratio = 0.0 if not normalized_chunks else round(duplicate_count / len(normalized_chunks), 4)
+        empty_documents = sum(1 for document in documents if not document.content.strip())
+        average_chunk_length = 0.0 if not chunk_lengths else round(sum(chunk_lengths) / len(chunk_lengths), 2)
+        score = 100.0
+        if knowledge_base.document_count == 0:
+            score -= 40
+        if knowledge_base.chunk_count == 0:
+            score -= 30
+        score -= min(30.0, duplicate_ratio * 100)
+        if average_chunk_length < 80 and knowledge_base.chunk_count > 0:
+            score -= 10
+        if average_chunk_length > 1600:
+            score -= 10
+        score -= min(10.0, empty_documents * 2.0)
+        score = round(max(0.0, score), 2)
+        return {
+            "tenant_id": tenant_id,
+            "knowledge_base_id": knowledge_base_id,
+            "document_count": knowledge_base.document_count,
+            "chunk_count": knowledge_base.chunk_count,
+            "average_chunk_length": average_chunk_length,
+            "duplicate_chunk_ratio": duplicate_ratio,
+            "empty_document_count": empty_documents,
+            "health_score": score,
+        }

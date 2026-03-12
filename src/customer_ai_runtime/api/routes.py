@@ -12,6 +12,7 @@ from customer_ai_runtime.api.schemas import (
     KnowledgeBaseCreateRequest,
     KnowledgeDocumentCreateRequest,
     KnowledgeSearchRequest,
+    MessageFeedbackRequest,
     PolicyUpdateRequest,
     PromptUpdateRequest,
     RTCRoomCreateRequest,
@@ -191,6 +192,47 @@ async def add_human_reply(
         payload.content,
     )
     return success_response(result.model_dump(mode="json"))
+
+
+@router.post("/api/v1/sessions/{session_id}/messages/{message_id}/feedback")
+async def submit_message_feedback(
+    session_id: str,
+    message_id: str,
+    payload: MessageFeedbackRequest,
+    request: Request,
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
+) -> JSONResponse:
+    container = get_container(request)
+    container.access_control.validate_tenant_access(auth_context, payload.tenant_id)
+    session, message = container.session_service.submit_message_feedback(
+        payload.tenant_id,
+        session_id,
+        message_id,
+        payload.feedback_type,
+        payload.comment,
+    )
+    handoff = None
+    if payload.feedback_type.value == "request_human":
+        context = await container.business_context_builder.build(
+            tenant_id=payload.tenant_id,
+            channel=session.channel,
+            session=session,
+            integration_context={},
+            host_auth_context=auth_context.host_auth_context,
+        )
+        handoff = await container.chat_service.handoff_service.create_package(
+            session,
+            payload.comment or "user_feedback_requested_human",
+            context,
+        )
+        container.session_service.save(session)
+    return success_response(
+        {
+            "message": message.model_dump(mode="json"),
+            "session": session.model_dump(mode="json"),
+            "handoff": None if handoff is None else handoff.model_dump(mode="json"),
+        }
+    )
 
 
 @router.post("/api/v1/sessions/{session_id}/close")
@@ -543,6 +585,41 @@ async def get_admin_rooms(
     require_admin(auth_context)
     container.access_control.validate_tenant_access(auth_context, tenant_id)
     return success_response(container.admin_service.list_rooms(tenant_id))
+
+
+@router.get("/api/v1/admin/knowledge-bases/{knowledge_base_id}/health")
+async def get_admin_knowledge_health(
+    knowledge_base_id: str,
+    tenant_id: str,
+    request: Request,
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
+) -> JSONResponse:
+    container = get_container(request)
+    require_admin(auth_context)
+    container.access_control.validate_tenant_access(auth_context, tenant_id)
+    return success_response(
+        container.admin_service.get_knowledge_health_report(tenant_id, knowledge_base_id)
+    )
+
+
+@router.get("/api/v1/admin/knowledge/retrieval-misses")
+async def get_admin_retrieval_miss_report(
+    request: Request,
+    tenant_id: str,
+    knowledge_base_id: str | None = Query(default=None, min_length=1, max_length=64),
+    limit: int = Query(default=20, ge=1, le=100),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
+) -> JSONResponse:
+    container = get_container(request)
+    require_admin(auth_context)
+    container.access_control.validate_tenant_access(auth_context, tenant_id)
+    return success_response(
+        container.admin_service.get_retrieval_miss_report(
+            tenant_id=tenant_id,
+            knowledge_base_id=knowledge_base_id,
+            limit=limit,
+        )
+    )
 
 
 @router.get("/api/v1/admin/providers/health")

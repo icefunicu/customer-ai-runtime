@@ -7,6 +7,7 @@ from customer_ai_runtime.domain.models import (
     DiagnosticLevel,
     IntentFrame,
     Message,
+    MessageFeedbackType,
     MessageRole,
     ResolutionStatus,
     RouteDecision,
@@ -192,6 +193,53 @@ class SessionService:
         session.waiting_human = False
         self.add_message(session, MessageRole.HUMAN, content)
         return self.save(session)
+
+    def submit_message_feedback(
+        self,
+        tenant_id: str,
+        session_id: str,
+        message_id: str,
+        feedback_type: MessageFeedbackType,
+        comment: str | None = None,
+    ) -> tuple[Session, Message]:
+        session = self.get(tenant_id, session_id)
+        for message in session.messages:
+            if message.message_id != message_id:
+                continue
+            message.feedback_type = feedback_type
+            message.feedback_comment = comment
+            message.feedback_submitted_at = utcnow()
+            self._diagnostics.record(
+                level=DiagnosticLevel.INFO,
+                code="message.feedback_recorded",
+                message="message feedback recorded",
+                context={
+                    "tenant_id": tenant_id,
+                    "session_id": session_id,
+                    "message_id": message_id,
+                    "feedback_type": feedback_type.value,
+                },
+            )
+            if feedback_type == MessageFeedbackType.REQUEST_HUMAN:
+                session.state = SessionState.WAITING_HUMAN
+                session.waiting_human = True
+                self._diagnostics.record(
+                    level=DiagnosticLevel.WARNING,
+                    code="message.feedback_request_human",
+                    message="message feedback requested human handoff",
+                    context={
+                        "tenant_id": tenant_id,
+                        "session_id": session_id,
+                        "message_id": message_id,
+                    },
+                )
+            self.save(session)
+            return session, message
+        raise AppError(
+            code="not_found",
+            message=zh("\\u6d88\\u606f\\u4e0d\\u5b58\\u5728"),
+            status_code=404,
+        )
 
     def _is_same_intent(self, current: IntentFrame, incoming: IntentFrame) -> bool:
         return (

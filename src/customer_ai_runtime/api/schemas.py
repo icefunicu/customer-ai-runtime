@@ -4,7 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from customer_ai_runtime.domain.models import ResolutionStatus
+from customer_ai_runtime.domain.models import MessageFeedbackType, ResolutionStatus
 
 ChannelType = Literal["web", "app", "h5", "mini_program", "app_voice", "rtc", "admin"]
 
@@ -38,6 +38,11 @@ class HandoffRequest(TenantScopedRequest):
 
 class HumanReplyRequest(TenantScopedRequest):
     content: str = Field(min_length=1, max_length=4000)
+
+
+class MessageFeedbackRequest(TenantScopedRequest):
+    feedback_type: MessageFeedbackType
+    comment: str | None = Field(default=None, max_length=1000)
 
 
 class KnowledgeBaseCreateRequest(TenantScopedRequest):
