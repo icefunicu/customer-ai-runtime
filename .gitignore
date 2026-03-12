@@ -1,0 +1,14 @@
+.venv/
+.idea/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+storage/
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+

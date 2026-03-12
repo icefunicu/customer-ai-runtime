@@ -1,0 +1,38 @@
+### Create knowledge base
+POST http://127.0.0.1:8000/api/v1/knowledge-bases
+X-API-Key: demo-public-key
+Content-Type: application/json
+
+{
+  "tenant_id": "demo-tenant",
+  "knowledge_base_id": "kb_support",
+  "name": "support",
+  "description": "support knowledge base"
+}
+
+### Add document
+POST http://127.0.0.1:8000/api/v1/knowledge-bases/kb_support/documents
+X-API-Key: demo-public-key
+Content-Type: application/json
+
+{
+  "tenant_id": "demo-tenant",
+  "title": "refund policy",
+  "content": "7-day refund supported. after-sale tickets are answered in 24 hours.",
+  "metadata": {
+    "source": "demo"
+  }
+}
+
+### Chat
+POST http://127.0.0.1:8000/api/v1/chat/messages
+X-API-Key: demo-public-key
+Content-Type: application/json
+
+{
+  "tenant_id": "demo-tenant",
+  "channel": "web",
+  "message": "What is the refund policy?",
+  "knowledge_base_id": "kb_support"
+}
+

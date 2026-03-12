@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "customer-ai-runtime"
+version = "0.1.0"
+description = "Modular enterprise intelligent customer service platform"
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "MIT" }
+authors = [
+  { name = "Customer AI Team", email = "team@example.com" }
+]
+dependencies = [
+  "aiofiles>=25.1.0",
+  "fastapi>=0.135.1",
+  "httpx>=0.28.1",
+  "openai>=2.26.0",
+  "opentelemetry-api>=1.40.0",
+  "opentelemetry-sdk>=1.40.0",
+  "pydantic>=2.12.0",
+  "pydantic-settings>=2.13.1",
+  "python-dotenv>=1.1.1",
+  "pyyaml>=6.0.2",
+  "qdrant-client>=1.17.0",
+  "structlog>=25.4.0",
+  "tenacity>=9.1.2",
+  "uvicorn>=0.41.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=9.0.2",
+  "pytest-asyncio>=1.2.0",
+  "pytest-cov>=7.0.0",
+  "ruff>=0.14.2"
+]
+
+[project.scripts]
+customer-ai-runtime = "customer_ai_runtime.__main__:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+

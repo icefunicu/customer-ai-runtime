@@ -1,0 +1,13 @@
+services:
+  customer-ai-runtime:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      CUSTOMER_AI_ENV: dev
+      CUSTOMER_AI_LLM_PROVIDER: local
+      CUSTOMER_AI_ASR_PROVIDER: local
+      CUSTOMER_AI_TTS_PROVIDER: local
+
