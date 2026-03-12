@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from customer_ai_runtime.application.plugins import PluginRegistry
 from customer_ai_runtime.application.runtime import DiagnosticsService, MetricsService, RuntimeConfigService
 from customer_ai_runtime.application.session import SessionService
 from customer_ai_runtime.application.knowledge import KnowledgeService
@@ -21,6 +22,7 @@ class AdminService:
         runtime_config: RuntimeConfigService,
         metrics: MetricsService,
         diagnostics: DiagnosticsService,
+        plugin_registry: PluginRegistry,
     ) -> None:
         self.settings = settings
         self.session_service = session_service
@@ -30,6 +32,7 @@ class AdminService:
         self.runtime_config = runtime_config
         self.metrics = metrics
         self.diagnostics_service = diagnostics
+        self.plugin_registry = plugin_registry
 
     def list_sessions(self, tenant_id: str) -> list[dict[str, Any]]:
         return [session.model_dump(mode="json") for session in self.session_service.list_by_tenant(tenant_id)]
@@ -92,3 +95,12 @@ class AdminService:
 
     def tool_catalog_items(self) -> list[dict[str, Any]]:
         return self.tool_catalog.list_tools()
+
+    def list_plugins(self) -> list[dict[str, Any]]:
+        return [descriptor.model_dump(mode="json") for descriptor in self.plugin_registry.list_descriptors()]
+
+    def enable_plugin(self, plugin_id: str) -> dict[str, Any]:
+        return self.plugin_registry.enable(plugin_id).model_dump(mode="json")
+
+    def disable_plugin(self, plugin_id: str) -> dict[str, Any]:
+        return self.plugin_registry.disable(plugin_id).model_dump(mode="json")

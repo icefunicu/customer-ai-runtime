@@ -1,47 +1,75 @@
 # Customer AI Runtime
 
-`customer-ai-runtime` 是一个面向真实业务场景的模块化智能客服平台参考实现，覆盖文本客服、语音客服、RTC 实时通话、RAG 知识增强、业务系统联动、AI/人工协同、运营管理和多提供商适配。
+`customer-ai-runtime` 是一个面向真实业务场景的智能客服能力平台。它不是单一 RAG 问答服务，而是一个可挂载、可插件化、可行业增强、可复用宿主登录态的客服平台参考实现。
 
-当前仓库已按真实工程流程建立：
+## 当前事实
 
-- 业务需求分析
-- 总体架构设计
-- 模块与接口设计
-- 开发路线图
-- 项目进展控制文档
-- 可运行工程骨架与核心服务实现
-- 测试、部署与接入文档
+- 当前仓库已经具备可运行能力：文本客服、语音轮次、RTC 房间与事件、知识库、业务工具、人工接手、管理接口、示例接入与自动化测试。
+- 当前仓库已补齐平台级核心能力：`Auth Bridge`、插件注册中心、行业适配器、上下文构造、知识域管理、回复后处理与插件管理接口。
+- 当前仓库仍然是单体参考实现，未来拆分为多服务属于 future target，不宣称当前已拆分。
 
-当前默认仓储已支持基于 `storage/state/` 的本地 JSON 持久化，服务重启后可恢复会话、知识库、RTC 房间、诊断事件和运行时 Prompt/Policy 配置。
+## 产品目标
 
-该系统也支持作为模块被宿主系统接入：
+平台要解决的不是“如何把 FAQ 接到大模型”，而是以下真实问题：
 
-- 作为独立服务部署
-- 作为 FastAPI 子应用挂载到宿主系统
-- 作为宿主进程内 facade 直接调用
+- 用统一路由把知识问答、实时业务查询、高风险问题和人工协同分流。
+- 把行业静态知识、实时业务数据和宿主上下文联合编排，而不是全部塞进 RAG。
+- 在宿主系统挂载模式下复用 Session / Cookie / JWT / SSO / 自定义 Token，不强制接入方改造成 `X-API-Key`。
+- 通过插件扩展路由、工具、行业增强、鉴权桥接、上下文增强、回复后处理与人工协同。
 
-## 项目目标
+## 架构分层
 
-平台不是简单 RAG Demo，而是一个可接入任意业务系统的客服能力层，解决以下问题：
+```text
+渠道接入层
+  HTTP Chat / Voice / Admin API
+  RTC WebSocket
+  宿主挂载模块 / SDK facade
 
-- 提高问题解决率和首轮解决率
-- 降低人工客服重复咨询量
-- 缩短文本与语音响应时间
-- 用知识库、工具调用和策略路由区分知识型问题与业务型问题
-- 在低置信度、高风险、投诉或用户主动要求时无缝转人工
-- 提供文本、语音、RTC 三种接入方式
-- 通过提供商适配层支持多厂商替换
+核心客服引擎层
+  Session 管理
+  Route Orchestrator
+  Knowledge / Business / Human Handoff 编排
+  Voice / RTC 状态机
 
-## 当前实现范围
+业务增强层
+  Industry Adapter
+  Business Context Builder
+  Knowledge Domain Manager
+  Real-time Business Data Provider
+  Response Enhancement Orchestrator
 
-- 文本客服闭环：会话、路由、RAG、工具调用、人工转接
-- 语音客服闭环：ASR 抽象、本地 ASR 开发提供商、TTS 音频输出
-- RTC 通话闭环：房间、状态机、WebSocket 事件协议、打断/结束/转人工
-- 知识库管理：创建知识库、导入文档、切片、检索
-- 管理能力：提示词、策略、指标、会话检索、故障诊断事件
-- 多提供商适配：本地提供商默认可跑，OpenAI/Qdrant 适配器可按环境变量启用
+宿主桥接层
+  Auth Bridge
+  Host Auth Context Mapper
+  Host Context Injection
 
-当前本地默认 TTS 提供商输出 `wav` 预览音频，用于链路验证；如需自然语音播报，可切换到已配置密钥的真实 TTS 提供商。
+插件平台层
+  Plugin Registry
+  Route / Tool / Auth / Industry / Handoff / Context / Response 插件
+
+提供商适配层
+  LLM / ASR / TTS / RTC / Vector Store / Business API
+
+运营管理层
+  Prompt / Policy / Knowledge / Diagnostics / Metrics / Plugin Admin
+```
+
+## 目录结构
+
+```text
+src/customer_ai_runtime/
+  api/                  FastAPI 路由、请求模型、宿主挂载入口
+  application/          核心编排、业务增强、Auth Bridge、插件装配
+  core/                 配置、日志、响应、错误、基础工具
+  domain/               领域模型、状态机、插件与鉴权值对象
+  providers/            LLM / ASR / TTS / 向量库 / 业务系统适配
+  repositories/         本地持久化仓储
+docs/                   业务、架构、模块、API、增强、鉴权、插件、部署、测试文档
+examples/               宿主挂载与客户端接入示例
+scripts/                启动、测试、种子数据脚本
+tests/                  单元、集成、关键链路测试
+deploy/                 Docker Compose 与部署模板
+```
 
 ## 快速启动
 
@@ -50,7 +78,7 @@
 .venv\Scripts\python.exe -m customer_ai_runtime
 ```
 
-服务默认启动在 `http://127.0.0.1:8000`。
+默认地址：`http://127.0.0.1:8000`
 
 ## 测试
 
@@ -58,49 +86,57 @@
 .venv\Scripts\python.exe -m pytest
 ```
 
-当前已验证结果：`10 passed`
+说明：
 
-## 项目结构
+- 当前仓库的测试结果只以你本地本次执行结果为准，不在文档中虚构“始终通过”。
+- 关键测试范围见 `docs/testing.md`。
 
-```text
-src/customer_ai_runtime/
-  api/                 FastAPI 路由与鉴权
-  application/         业务编排与服务层
-  domain/              领域模型、状态机、值对象
-  providers/           LLM/ASR/TTS/RTC/向量库/业务系统适配
-  repositories/        默认进程内仓储
-  core/                配置、日志、异常、指标
-docs/                  业务、架构、模块、API、测试、部署文档
-tests/                 单元、集成、契约测试
-examples/              HTTP 与 Python 接入示例
-scripts/               启动、测试、示例导入脚本
-deploy/                Docker 与环境模板
-```
+## 接入模式
 
-## 关键文档
+支持以下模式：
 
-- [业务需求](docs/business-requirements.md)
-- [总体架构](docs/architecture.md)
-- [模块设计](docs/module-design.md)
-- [开发路线图](docs/roadmap.md)
-- [进展控制](docs/progress-control.md)
-- [API 文档](docs/api.md)
-- [项目说明](docs/project-overview.md)
-- [测试文档](docs/testing.md)
-- [部署文档](docs/deployment.md)
+- 独立 API 服务
+- 宿主 FastAPI 子应用挂载
+- 宿主进程内 facade / SDK 调用
+- Web / H5 / App / 小程序文本接入
+- App 语音轮次接入
+- RTC 实时通话接入
 
-## 接入说明
+## 认证模式
 
-- 文本客服：调用 `POST /api/v1/chat/messages`
-- 语音客服：调用 `POST /api/v1/voice/turn`
-- RTC 客服：先创建房间，再连接 `WS /ws/v1/rtc/{room_id}`
-- 知识库导入：调用 `POST /api/v1/knowledge-bases/{knowledge_base_id}/documents`
-- 管理端：查看 `GET /api/v1/admin/*`
-- 宿主系统挂载示例：`examples/host_fastapi_integration.py`
+平台设计支持以下认证方式：
 
-默认示例 API Key：
+- `X-API-Key`
+- `Cookie / Session`
+- `Authorization: Bearer <JWT>`
+- `X-Host-Token`
+- 通过注册自定义 `AuthBridge` 实现宿主票据换票或内部鉴权
 
-- 客户侧：`demo-public-key`
-- 管理侧：`demo-admin-key`
+## 文档索引
 
-仅用于本地演示，生产环境必须改为安全密钥并接入正式鉴权。
+- `docs/project-overview.md`
+- `docs/business-requirements.md`
+- `docs/architecture.md`
+- `docs/module-design.md`
+- `docs/business-enhancement.md`
+- `docs/adapter-design.md`
+- `docs/auth-bridge.md`
+- `docs/plugin-system.md`
+- `docs/roadmap.md`
+- `docs/progress-control.md`
+- `docs/api.md`
+- `docs/testing.md`
+- `docs/deployment.md`
+
+## 示例
+
+- `examples/http-demo.http`
+- `examples/python_client.py`
+- `examples/host_fastapi_integration.py`
+- `examples/host_custom_auth_bridge.py`
+
+## 开发约束
+
+- 设计与接口变更必须先改文档，再改代码。
+- 禁止把实时业务数据粗暴写入通用知识库后假装支持业务增强。
+- 插件与鉴权桥接属于主架构，不是可有可无的附加补丁。

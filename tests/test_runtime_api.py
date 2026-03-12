@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import base64
+import hashlib
+import hmac
+import json
 from pathlib import Path
 
 import pytest
@@ -8,8 +11,11 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from customer_ai_runtime.app import create_app
-from customer_ai_runtime.integration import CustomerAIRuntimeModule
+from customer_ai_runtime.application.auth import AuthBridgePlugin
+from customer_ai_runtime.application.plugins import PluginDescriptor
 from customer_ai_runtime.core.config import get_settings
+from customer_ai_runtime.domain.platform import AuthMode, AuthRequestContext, PluginKind, ResolvedAuthContext
+from customer_ai_runtime.integration import CustomerAIRuntimeModule
 
 
 CUSTOMER_HEADERS = {"X-API-Key": "demo-public-key"}
@@ -48,6 +54,39 @@ def seed_knowledge_base(client: TestClient) -> None:
         },
     )
     assert response.status_code == 200
+
+
+def issue_test_jwt(secret: str, payload: dict[str, object]) -> str:
+    header = {"alg": "HS256", "typ": "JWT"}
+    encoded_header = base64.urlsafe_b64encode(json.dumps(header).encode()).rstrip(b"=").decode()
+    encoded_payload = base64.urlsafe_b64encode(json.dumps(payload).encode()).rstrip(b"=").decode()
+    signing_input = f"{encoded_header}.{encoded_payload}".encode()
+    signature = hmac.new(secret.encode(), signing_input, hashlib.sha256).digest()
+    encoded_signature = base64.urlsafe_b64encode(signature).rstrip(b"=").decode()
+    return f"{encoded_header}.{encoded_payload}.{encoded_signature}"
+
+
+class HeaderBridgePlugin(AuthBridgePlugin):
+    def __init__(self) -> None:
+        super().__init__(
+            PluginDescriptor(
+                plugin_id="auth.test_header",
+                name="Test Header Bridge",
+                kind=PluginKind.AUTH_BRIDGE,
+                priority=900,
+                capabilities=["custom_header"],
+            )
+        )
+
+    async def can_handle(self, request_data: AuthRequestContext) -> bool:
+        return request_data.headers.get("x-test-host-user") == "user-custom"
+
+    async def authenticate(self, request_data: AuthRequestContext) -> ResolvedAuthContext:
+        return ResolvedAuthContext(
+            role="customer",
+            tenant_ids=["demo-tenant"],
+            auth_mode=AuthMode.CUSTOM_BRIDGE,
+        )
 
 
 def test_chat_knowledge_flow(client: TestClient) -> None:
@@ -215,6 +254,171 @@ def test_admin_room_and_knowledge_listing(client: TestClient) -> None:
     assert diagnostics.json()["data"]
 
 
+def test_auth_context_with_api_key(client: TestClient) -> None:
+    response = client.get("/api/v1/auth/context", headers=CUSTOMER_HEADERS)
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["auth_mode"] == "api_key"
+    assert data["tenant_ids"] == ["demo-tenant"]
+
+
+def test_context_resolve_with_industry_and_page_context(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/context/resolve",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "integration_context": {
+                "industry": "ecommerce",
+                "page_context": {"page_type": "order_detail"},
+                "business_objects": {"order_id": "ORD-1001"},
+            },
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["industry"] == "ecommerce"
+    assert data["page_context"]["page_type"] == "order_detail"
+    assert data["business_objects"]["order_id"] == "ORD-1001"
+
+
+def test_session_auth_bridge_chat_flow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CUSTOMER_AI_STORAGE_ROOT", str(tmp_path / "storage"))
+    monkeypatch.setenv(
+        "CUSTOMER_AI_HOST_SESSION_MAP_JSON",
+        json.dumps(
+            {
+                "sess-1": {
+                    "tenant_id": "demo-tenant",
+                    "principal_id": "user-1",
+                    "roles": ["member"],
+                    "permissions": ["orders:read"],
+                    "source_system": "host-shop",
+                }
+            }
+        ),
+    )
+    get_settings.cache_clear()
+    with TestClient(create_app()) as local_client:
+        local_client.cookies.set("host_session", "sess-1")
+        response = local_client.post(
+            "/api/v1/chat/messages",
+            json={
+                "tenant_id": "demo-tenant",
+                "channel": "web",
+                "message": "我的订单 ORD-1001 发货了吗",
+                "integration_context": {"industry": "ecommerce"},
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["route"] == "business"
+        assert data["host_auth_context"]["principal_id"] == "user-1"
+        assert data["host_auth_context"]["auth_mode"] == "session"
+    get_settings.cache_clear()
+
+
+def test_jwt_auth_bridge_chat_flow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    secret = "jwt-secret"
+    monkeypatch.setenv("CUSTOMER_AI_STORAGE_ROOT", str(tmp_path / "storage"))
+    monkeypatch.setenv("CUSTOMER_AI_HOST_JWT_SECRET", secret)
+    token = issue_test_jwt(
+        secret,
+        {
+            "tenant_id": "demo-tenant",
+            "principal_id": "user-jwt",
+            "roles": ["member"],
+            "permissions": ["courses:read"],
+            "source_system": "host-education",
+        },
+    )
+    get_settings.cache_clear()
+    with TestClient(create_app()) as local_client:
+        response = local_client.post(
+            "/api/v1/chat/messages",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "tenant_id": "demo-tenant",
+                "channel": "web",
+                "message": "课程 COURSE-6001 有效期到什么时候",
+                "integration_context": {"industry": "education"},
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["host_auth_context"]["principal_id"] == "user-jwt"
+        assert data["host_auth_context"]["auth_mode"] == "jwt"
+    get_settings.cache_clear()
+
+
+def test_custom_token_auth_bridge_and_plugin_toggle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CUSTOMER_AI_STORAGE_ROOT", str(tmp_path / "storage"))
+    monkeypatch.setenv(
+        "CUSTOMER_AI_HOST_TOKEN_MAP_JSON",
+        json.dumps(
+            {
+                "host-token-1": {
+                    "tenant_id": "demo-tenant",
+                    "principal_id": "user-token",
+                    "roles": ["member"],
+                    "permissions": ["orders:read"],
+                    "source_system": "host-app",
+                }
+            }
+        ),
+    )
+    get_settings.cache_clear()
+    with TestClient(create_app()) as local_client:
+        plugin_list = local_client.get("/api/v1/admin/plugins", headers=ADMIN_HEADERS)
+        assert plugin_list.status_code == 200
+        plugin_ids = {item["plugin_id"] for item in plugin_list.json()["data"]}
+        assert "route.business_intent" in plugin_ids
+
+        disabled = local_client.post(
+            "/api/v1/admin/plugins/route.business_intent/disable",
+            headers=ADMIN_HEADERS,
+        )
+        assert disabled.status_code == 200
+        assert disabled.json()["data"]["enabled"] is False
+
+        chat_after_disable = local_client.post(
+            "/api/v1/chat/messages",
+            headers={"X-Host-Token": "host-token-1"},
+            json={
+                "tenant_id": "demo-tenant",
+                "channel": "web",
+                "message": "订单 ORD-1001 发货了没",
+                "integration_context": {"industry": "ecommerce"},
+            },
+        )
+        assert chat_after_disable.status_code == 200
+        assert chat_after_disable.json()["data"]["route"] == "fallback"
+
+        enabled = local_client.post(
+            "/api/v1/admin/plugins/route.business_intent/enable",
+            headers=ADMIN_HEADERS,
+        )
+        assert enabled.status_code == 200
+        assert enabled.json()["data"]["enabled"] is True
+
+        chat_after_enable = local_client.post(
+            "/api/v1/chat/messages",
+            headers={"X-Host-Token": "host-token-1"},
+            json={
+                "tenant_id": "demo-tenant",
+                "channel": "web",
+                "message": "订单 ORD-1001 发货了没",
+                "integration_context": {"industry": "ecommerce"},
+            },
+        )
+        assert chat_after_enable.status_code == 200
+        data = chat_after_enable.json()["data"]
+        assert data["route"] == "business"
+        assert data["host_auth_context"]["auth_mode"] == "custom_token"
+    get_settings.cache_clear()
+
+
 def test_persistence_across_app_restart(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     storage_root = tmp_path / "storage"
     monkeypatch.setenv("CUSTOMER_AI_STORAGE_ROOT", str(storage_root))
@@ -240,6 +444,12 @@ def test_persistence_across_app_restart(tmp_path: Path, monkeypatch: pytest.Monk
             json={"knowledge_top_k": 4},
         )
         assert policy_update.status_code == 200
+
+        plugin_disable = first_client.post(
+            "/api/v1/admin/plugins/route.business_intent/disable",
+            headers=ADMIN_HEADERS,
+        )
+        assert plugin_disable.status_code == 200
 
     get_settings.cache_clear()
 
@@ -277,6 +487,26 @@ def test_persistence_across_app_restart(tmp_path: Path, monkeypatch: pytest.Monk
         )
         assert tool_catalog.status_code == 200
         assert tool_catalog.json()["data"]
+
+        plugins = second_client.get("/api/v1/admin/plugins", headers=ADMIN_HEADERS)
+        assert plugins.status_code == 200
+        business_route = next(
+            item for item in plugins.json()["data"] if item["plugin_id"] == "route.business_intent"
+        )
+        assert business_route["enabled"] is False
+
+        fallback_chat = second_client.post(
+            "/api/v1/chat/messages",
+            headers=CUSTOMER_HEADERS,
+            json={
+                "tenant_id": "demo-tenant",
+                "channel": "web",
+                "message": "订单 ORD-1001 发货了吗",
+                "integration_context": {"industry": "ecommerce"},
+            },
+        )
+        assert fallback_chat.status_code == 200
+        assert fallback_chat.json()["data"]["route"] == "fallback"
 
     get_settings.cache_clear()
 
@@ -321,4 +551,27 @@ def test_embedded_module_mount_to_host(tmp_path: Path, monkeypatch: pytest.Monke
         response = host_client.get("/embedded/customer-ai/healthz")
         assert response.status_code == 200
         assert response.json()["data"]["status"] == "ok"
+    get_settings.cache_clear()
+
+
+def test_embedded_module_custom_auth_bridge(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CUSTOMER_AI_STORAGE_ROOT", str(tmp_path / "storage"))
+    get_settings.cache_clear()
+    host_app = FastAPI()
+    module = CustomerAIRuntimeModule.create()
+    module.register_plugin(HeaderBridgePlugin())
+    module.mount_to(host_app, prefix="/embedded/customer-ai")
+
+    with TestClient(host_app) as host_client:
+        response = host_client.post(
+            "/embedded/customer-ai/api/v1/chat/messages",
+            headers={"X-Test-Host-User": "user-custom"},
+            json={
+                "tenant_id": "demo-tenant",
+                "channel": "web",
+                "message": "我要人工客服",
+            },
+        )
+        assert response.status_code == 200
+        assert response.json()["data"]["route"] == "handoff"
     get_settings.cache_clear()

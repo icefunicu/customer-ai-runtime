@@ -7,7 +7,9 @@ from fastapi import FastAPI
 
 from customer_ai_runtime.app import create_app
 from customer_ai_runtime.application.container import Container, ContainerOverrides, build_container
+from customer_ai_runtime.application.plugins import Plugin
 from customer_ai_runtime.core.config import Settings, get_settings
+from customer_ai_runtime.domain.platform import HostAuthContext
 
 
 @dataclass
@@ -32,6 +34,13 @@ class CustomerAIRuntimeModule:
     def mount_to(self, host_app: FastAPI, prefix: str = "/customer-ai") -> None:
         host_app.mount(prefix, self.as_fastapi_app())
 
+    def register_plugin(self, plugin: Plugin) -> None:
+        self.container.plugin_registry.register(plugin)
+
+    def register_plugins(self, plugins: list[Plugin]) -> None:
+        for plugin in plugins:
+            self.register_plugin(plugin)
+
     async def chat(
         self,
         tenant_id: str,
@@ -40,6 +49,7 @@ class CustomerAIRuntimeModule:
         channel: str = "web",
         knowledge_base_id: str | None = None,
         integration_context: dict[str, Any] | None = None,
+        host_auth_context: HostAuthContext | None = None,
     ) -> dict[str, Any]:
         return await self.container.chat_service.process_message(
             tenant_id=tenant_id,
@@ -48,6 +58,7 @@ class CustomerAIRuntimeModule:
             message=message,
             knowledge_base_id=knowledge_base_id,
             integration_context=integration_context,
+            host_auth_context=host_auth_context,
         )
 
     async def voice_turn(
@@ -60,6 +71,7 @@ class CustomerAIRuntimeModule:
         transcript_hint: str | None = None,
         knowledge_base_id: str | None = None,
         integration_context: dict[str, Any] | None = None,
+        host_auth_context: HostAuthContext | None = None,
     ) -> dict[str, Any]:
         return await self.container.voice_service.process_turn(
             tenant_id=tenant_id,
@@ -70,5 +82,5 @@ class CustomerAIRuntimeModule:
             transcript_hint=transcript_hint,
             knowledge_base_id=knowledge_base_id,
             integration_context=integration_context,
+            host_auth_context=host_auth_context,
         )
-

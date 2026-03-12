@@ -4,6 +4,7 @@ from typing import Any
 
 from customer_ai_runtime.core.errors import AppError
 from customer_ai_runtime.domain.models import ASRRequest, Channel, RTCRoom, RTCState, TTSRequest, utcnow
+from customer_ai_runtime.domain.platform import HostAuthContext
 from customer_ai_runtime.providers.base import ASRProvider, TTSProvider
 from customer_ai_runtime.repositories.memory import InMemoryRTCRepository
 
@@ -38,6 +39,7 @@ class VoiceService:
         transcript_hint: str | None,
         knowledge_base_id: str | None,
         integration_context: dict | None = None,
+        host_auth_context: HostAuthContext | None = None,
     ) -> dict:
         asr_result = await self.asr_provider.transcribe(
             ASRRequest(
@@ -54,6 +56,7 @@ class VoiceService:
             message=asr_result.transcript,
             knowledge_base_id=knowledge_base_id,
             integration_context=integration_context,
+            host_auth_context=host_auth_context,
         )
         tts_result = await self.tts_provider.synthesize(
             TTSRequest(tenant_id=tenant_id, text=chat_result["answer"])
@@ -157,7 +160,13 @@ class RTCService:
         )
         return room
 
-    async def handle_event(self, tenant_id: str, room_id: str, payload: dict[str, Any]) -> list[dict]:
+    async def handle_event(
+        self,
+        tenant_id: str,
+        room_id: str,
+        payload: dict[str, Any],
+        host_auth_context: HostAuthContext | None = None,
+    ) -> list[dict]:
         room = self.get_room(tenant_id, room_id)
         event_type = payload.get("type")
         if event_type == "join":
@@ -198,6 +207,7 @@ class RTCService:
             transcript_hint=payload.get("transcript_hint"),
             knowledge_base_id=payload.get("knowledge_base_id"),
             integration_context=payload.get("integration_context"),
+            host_auth_context=host_auth_context,
         )
         room.last_transcript = voice_result["transcript"]
         room.state = RTCState.WAITING_HUMAN if voice_result["handoff"] else RTCState.SPEAKING

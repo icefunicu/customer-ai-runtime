@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 
 from customer_ai_runtime.api.routes import router
@@ -13,8 +15,18 @@ from customer_ai_runtime.core.responses import error_response
 def create_app(container: Container | None = None, route_prefix: str = "") -> FastAPI:
     settings = container.settings if container else get_settings()
     configure_logging(settings.log_level)
-    app = FastAPI(title="Customer AI Runtime", version="0.1.0")
-    app.state.container = container or build_container(settings)
+    resolved_container = container or build_container(settings)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        await resolved_container.plugin_registry.startup()
+        try:
+            yield
+        finally:
+            await resolved_container.plugin_registry.shutdown()
+
+    app = FastAPI(title="Customer AI Runtime", version="0.1.0", lifespan=lifespan)
+    app.state.container = resolved_container
     app.include_router(router, prefix=route_prefix)
 
     @app.exception_handler(AppError)

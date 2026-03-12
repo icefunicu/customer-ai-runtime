@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 from customer_ai_runtime.core.errors import AppError
@@ -120,4 +121,7 @@ class KnowledgeService:
 
     async def retrieve(self, tenant_id: str, knowledge_base_id: str, query: str, top_k: int):
         hits = await self._vector_store.search(tenant_id, knowledge_base_id, query, top_k)
+        if not hits:
+            fallback_chunks = self._repository.list_chunks(tenant_id, knowledge_base_id)[:top_k]
+            hits = [SimpleNamespace(chunk=chunk, score=0.1) for chunk in fallback_chunks]
         return citations_from_hits(hits)

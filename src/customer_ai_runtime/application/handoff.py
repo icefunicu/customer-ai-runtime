@@ -1,29 +1,67 @@
 from __future__ import annotations
 
-from customer_ai_runtime.domain.models import HandoffPackage, MessageRole, Session, SessionState
-
-from customer_ai_runtime.application.runtime import zh
+from customer_ai_runtime.application.plugins import HumanHandoffPlugin, PluginRegistry, context_to_plugin_context
+from customer_ai_runtime.domain.models import Session, SessionState
+from customer_ai_runtime.domain.platform import BusinessContext, PluginKind
 
 
 class HandoffService:
-    def create_package(self, session: Session, reason: str) -> HandoffPackage:
-        history = session.messages[-10:]
-        user_messages = [message.content for message in history if message.role == MessageRole.USER]
-        intent = user_messages[-1] if user_messages else zh("\\u7528\\u6237\\u9700\\u8981\\u4eba\\u5de5")
-        summary = " | ".join(message.content for message in history[-6:])
-        recommended_reply = zh(
-            "\\u4eba\\u5de5\\u5ba2\\u670d\\u53ef\\u5148\\u786e\\u8ba4\\u7528\\u6237\\u8bc9\\u6c42"
-            "\\uff0c\\u518d\\u57fa\\u4e8e\\u5f53\\u524d\\u6458\\u8981\\u7ee7\\u7eed\\u5904\\u7406\\u3002"
+    def __init__(self, registry: PluginRegistry) -> None:
+        self._registry = registry
+
+    async def should_handoff(
+        self,
+        *,
+        business_context: BusinessContext,
+        route: str,
+        response: dict,
+    ) -> tuple[bool, str]:
+        plugin_context = context_to_plugin_context(
+            tenant_id=business_context.tenant_id,
+            channel=business_context.channel,
+            session_id=business_context.session_id,
+            industry=business_context.industry,
+            integration_context=business_context.integration_context,
+            host_auth_context=business_context.host_auth_context,
+            business_context=business_context,
+            route=route,
+            response=response,
         )
+        best_reason = ""
+        should_handoff = False
+        best_priority = -1
+        for plugin in self._registry.resolve(
+            PluginKind.HUMAN_HANDOFF,
+            tenant_id=business_context.tenant_id,
+            industry=business_context.industry,
+            channel=business_context.channel,
+        ):
+            if not isinstance(plugin, HumanHandoffPlugin):
+                continue
+            decision = await plugin.evaluate(plugin_context)
+            if decision.should_handoff and decision.priority > best_priority:
+                should_handoff = True
+                best_reason = decision.reason
+                best_priority = decision.priority
+        return should_handoff, best_reason
+
+    async def create_package(
+        self,
+        session: Session,
+        reason: str,
+        business_context: BusinessContext,
+    ):
         session.state = SessionState.WAITING_HUMAN
         session.waiting_human = True
-        return HandoffPackage(
-            tenant_id=session.tenant_id,
-            session_id=session.session_id,
-            reason=reason,
-            summary=summary,
-            intent=intent,
-            recommended_reply=recommended_reply,
-            history=history,
-        )
-
+        for plugin in self._registry.resolve(
+            PluginKind.HUMAN_HANDOFF,
+            tenant_id=business_context.tenant_id,
+            industry=business_context.industry,
+            channel=business_context.channel,
+        ):
+            if not isinstance(plugin, HumanHandoffPlugin):
+                continue
+            package = await plugin.build_package(session, reason)
+            if package is not None:
+                return package
+        return None

@@ -54,6 +54,13 @@ class Settings(BaseSettings):
     business_api_key: str | None = None
     business_api_timeout_seconds: float = 8.0
     business_tool_endpoint_map_json: str = "{}"
+    host_session_cookie_name: str = "host_session"
+    host_session_map_json: str = "{}"
+    host_token_map_json: str = "{}"
+    host_jwt_secret: str | None = None
+    host_jwt_issuer: str | None = None
+    host_jwt_audience: str | None = None
+    knowledge_domain_map_json: str = "{}"
     api_keys_json: str = Field(default_factory=lambda: json.dumps(DEFAULT_API_KEYS))
 
     def get_api_keys(self) -> dict[str, ApiKeyRecord]:
@@ -62,6 +69,15 @@ class Settings(BaseSettings):
 
     def get_business_tool_endpoint_map(self) -> dict[str, str]:
         return json.loads(self.business_tool_endpoint_map_json or "{}")
+
+    def get_host_session_map(self) -> dict[str, dict[str, object]]:
+        return json.loads(self.host_session_map_json or "{}")
+
+    def get_host_token_map(self) -> dict[str, dict[str, object]]:
+        return json.loads(self.host_token_map_json or "{}")
+
+    def get_knowledge_domain_map(self) -> dict[str, object]:
+        return json.loads(self.knowledge_domain_map_json or "{}")
 
 
 @lru_cache(maxsize=1)

@@ -52,7 +52,19 @@ class KnowledgeSearchRequest(TenantScopedRequest):
 
 
 class BusinessQueryRequest(TenantScopedRequest):
-    tool_name: Literal["order_status", "after_sale_status", "logistics_tracking", "account_lookup"]
+    tool_name: Literal[
+        "order_status",
+        "after_sale_status",
+        "logistics_tracking",
+        "account_lookup",
+        "subscription_lookup",
+        "ticket_lookup",
+        "course_lookup",
+        "progress_lookup",
+        "waybill_lookup",
+        "claim_lookup",
+        "crm_profile",
+    ]
     parameters: dict[str, Any] = Field(default_factory=dict)
     integration_context: dict[str, Any] = Field(default_factory=dict)
 
@@ -96,3 +108,9 @@ class PolicyUpdateRequest(BaseModel):
     risk_keywords: list[str] | None = None
     human_request_keywords: list[str] | None = None
     business_keyword_map: dict[str, list[str]] | None = None
+
+
+class ContextResolveRequest(TenantScopedRequest):
+    session_id: str | None = None
+    channel: ChannelType = "web"
+    integration_context: dict[str, Any] = Field(default_factory=dict)

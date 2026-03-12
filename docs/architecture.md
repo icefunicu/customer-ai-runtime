@@ -1,152 +1,161 @@
 # 总体架构设计
 
-## 1. 架构目标
+## 1. 设计目标
 
-系统目标是在统一客服引擎之上，支持文本、语音、RTC、多租户、知识增强、业务查询和人工协同，并通过提供商适配层实现可替换、可灰度和可维护。
+平台目标是在统一客服引擎上，支持文本、语音、RTC、多行业增强、宿主系统挂载、自定义鉴权桥接和插件化扩展。
 
-## 2. 分层架构
+## 2. 当前事实与 Target State
+
+### 2.1 当前事实
+
+- 已有单体参考实现，可运行文本、语音、RTC、知识库、基础工具与人工协同。
+- 运行模式支持独立 FastAPI 与宿主 FastAPI 挂载。
+
+### 2.2 Target State
+
+- 在现有单体参考实现上，引入平台级 `Auth Bridge`、插件平台和业务增强层。
+- 保持单体可运行，同时保留未来拆分为多服务的边界。
+
+## 3. 分层架构
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
-│ 渠道接入层                                                  │
-│ Web/App/H5 文本 API | 语音 API | RTC WebSocket | 管理 API   │
-└───────────────┬──────────────────────────────────────────────┘
-                │ 标准化请求 / 事件
-┌───────────────▼──────────────────────────────────────────────┐
-│ 核心客服引擎层                                              │
-│ Session 管理 | 路由策略 | RAG 编排 | LLM 编排 | 人工协同     │
-│ 工具调度 | 语音状态机 | RTC 通话状态机 | 兜底/重试/超时      │
-└───────────────┬──────────────────────────────────────────────┘
-                │ 抽象接口
-┌───────────────▼──────────────────────────────────────────────┐
-│ 提供商适配层                                                │
-│ LLM | ASR | TTS | RTC | Vector Store | Business API Adapter │
-└───────────────┬──────────────────────────────────────────────┘
-                │ 配置与仓储
-┌───────────────▼──────────────────────────────────────────────┐
-│ 运营管理层                                                  │
-│ Prompt 管理 | 策略配置 | 知识库管理 | 会话检索 | 指标分析     │
-│ 灰度与回滚 | 故障诊断                                       │
+│ 渠道接入层                                                   │
+│ HTTP Chat / Voice / Admin API | RTC WebSocket | SDK / 挂载  │
+└──────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌──────────────────────────────────────────────────────────────┐
+│ 宿主桥接层                                                   │
+│ Auth Bridge | Host Auth Context Mapper | Host Context Proxy │
+└──────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌──────────────────────────────────────────────────────────────┐
+│ 核心客服引擎层                                               │
+│ Session | Route Orchestrator | LLM Orchestrator             │
+│ Voice Runtime | RTC State Machine | Handoff Orchestrator    │
+└──────────────────────────────────────────────────────────────┘
+            │                          │
+            ▼                          ▼
+┌─────────────────────────────┐  ┌─────────────────────────────┐
+│ 业务增强层                  │  │ 插件平台层                  │
+│ Industry Adapter            │  │ Plugin Registry             │
+│ Business Context Builder    │  │ Route / Tool / Auth /       │
+│ Knowledge Domain Manager    │  │ Industry / Handoff /        │
+│ Real-time Data Provider     │  │ Context / Response Plugins  │
+│ Response Enhancement        │  │ Lifecycle / Priority        │
+└─────────────────────────────┘  └─────────────────────────────┘
+            │                          │
+            └──────────────┬───────────┘
+                           ▼
+┌──────────────────────────────────────────────────────────────┐
+│ 提供商适配层                                                 │
+│ LLM | ASR | TTS | RTC | Vector Store | Business API         │
+└──────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌──────────────────────────────────────────────────────────────┐
+│ 运营管理层                                                   │
+│ Prompt | Policy | Knowledge | Plugin Admin | Metrics        │
+│ Diagnostics | 灰度与回滚                                     │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-## 3. 模块划分
+## 4. 关键模块关系
 
-### 3.1 核心引擎
+### 4.1 渠道接入层
 
-- `session`: 会话上下文、状态流转、消息历史
-- `router`: 知识/业务/人工/风险分类与兜底
-- `rag`: 导入、切片、向量化、检索、上下文构造
-- `orchestrator`: Prompt 组装、策略执行、回复生成
-- `handoff`: 人工协同、摘要生成、推荐回复
+- 负责把文本、语音、RTC 输入标准化为统一请求模型。
+- 负责从 HTTP Header / Cookie / Query / Body 中收集宿主上下文。
 
-### 3.2 渠道接入
+### 4.2 宿主桥接层
 
-- `chat api`: 文本消息收发
-- `voice api`: 语音上传、识别、合成结果返回
-- `rtc gateway`: 房间管理、WebSocket 事件协议、通话状态
-- `admin api`: 运营与管理
+- 优先处理认证入口。
+- 当缺失 `X-API-Key` 时，允许通过 `Auth Bridge` 完成宿主身份认证。
+- 产出统一 `HostAuthContext`。
 
-### 3.3 提供商适配
+### 4.3 核心客服引擎层
 
-- `llm adapters`: 本地规则提供商、OpenAI 兼容提供商
-- `asr adapters`: 本地开发提供商、OpenAI 兼容提供商
-- `tts adapters`: 本地开发提供商、Windows SAPI / OpenAI 兼容提供商
-- `rtc adapters`: 本地房间控制提供商
-- `vector adapters`: 进程内向量库、Qdrant 适配
-- `business adapters`: 本地业务数据适配器与 HTTP 业务系统适配器
+- `Session` 管理会话生命周期。
+- `Route Orchestrator` 决定知识、业务、人工、高风险、插件路线。
+- `LLM Orchestrator` 融合检索结果、实时数据和上下文。
+- `RTC` 服务直接处理实时热路径，不通过事件总线。
 
-### 3.4 运营管理
+### 4.4 业务增强层
 
-- `prompt registry`: 运行时 Prompt 模板
-- `policy registry`: 路由阈值、风控词、灰度策略
-- `metrics`: 计数器与时延观测
-- `diagnostics`: 最近错误和关键事件
+- `Business Context Builder` 合并页面、用户、宿主对象、会话摘要。
+- `Knowledge Domain Manager` 管理不同租户、行业下的知识域。
+- `Real-time Business Data Provider` 通过业务工具插件读取动态数据。
+- `Response Enhancement Orchestrator` 统一做引用、风格、脱敏和结构化输出后处理。
 
-## 4. 数据流与调用链
+### 4.5 插件平台层
 
-### 4.1 文本链路
+- 插件是主流程的一部分，不是可有可无的边车。
+- 路由、业务工具、人工协同、行业适配、鉴权桥接、上下文增强、回复后处理都通过插件接入。
 
-1. 渠道请求进入 `chat api`
-2. 鉴权并绑定 `tenant_id`
-3. `session service` 恢复或创建会话
-4. `route service` 分类
-5. `rag service` 或 `tool service` 获取上下文
-6. `orchestrator` 调用 LLM 适配器生成回复
-7. `handoff service` 判断是否需要人工
-8. 返回文本、引用、动作、指标事件
+## 5. 典型调用链
 
-### 4.2 语音链路
+### 5.1 文本请求
 
-1. 语音 API 接收音频载荷
-2. `asr adapter` 输出识别文本
-3. 进入统一文本路由与编排
-4. `tts adapter` 产出音频结果
-5. 返回文本、音频、识别结果、回复状态
+1. 接收 HTTP 请求。
+2. `AuthService` 通过 API Key 或 Auth Bridge 解析身份。
+3. `Business Context Builder` 合并宿主与页面上下文。
+4. `Industry Adapter` 识别行业。
+5. `Route Strategy Plugins` 决定走知识、业务、人工或高风险。
+6. 若为知识型：`Knowledge Domain Manager` 解析知识域并检索。
+7. 若为业务型：`Business Tool Plugins` 或 `BusinessAdapter` 调实时接口。
+8. `LLM / Response Enhancement` 生成回复。
+9. `Human Handoff Plugins` 判断是否转人工。
+10. `Response Post Processor Plugins` 完成脱敏、格式化、多语言或结构化输出。
 
-### 4.3 RTC 通话链路
+### 5.2 语音请求
 
-1. 客户端创建/加入 RTC 房间
-2. WebSocket 发送 `user_audio` 事件
-3. 服务端直接处理媒体相关事件，不通过事件总线
-4. `rtc service` 维护房间状态机
-5. `asr adapter` 产生增量文本，触发路由与编排
-6. `tts adapter` 产生音频片段并回推 `assistant_audio`
-7. 若打断、超时、人工请求则切换状态并发出控制事件
+1. ASR 产出文本。
+2. 进入统一文本链路。
+3. TTS 输出音频。
 
-### 4.4 转人工链路
+### 5.3 RTC 请求
 
-1. 路由或用户触发人工需求
-2. `handoff service` 汇总摘要、意图、历史上下文和推荐回复
-3. 会话状态切换为 `waiting_human`
-4. 管理端或人工系统拉取交接内容并接管
+1. 建房/入房。
+2. WebSocket 收用户音频事件。
+3. 直接走 RTC 状态机与语音链路。
+4. 返回 `transcript`、`assistant_message`、`assistant_audio`、`state_changed`、`handoff` 等事件。
 
-### 4.5 工具调用链路
+## 6. API 模式与挂载模式
 
-1. 路由识别为业务型问题
-2. `tool service` 根据工具名/意图调用业务适配器
-3. 返回结构化结果与安全摘要
-4. 编排层决定直接回复还是补充人工指引
+### 6.1 API 模式
 
-## 5. 配置与扩展设计
+- 独立部署。
+- 主要通过 `X-API-Key` 或宿主桥接 Header / Cookie 调用。
 
-### 5.1 启动时配置
+### 6.2 挂载模式
 
-- 提供商选择
-- OpenAI / Qdrant / 外部业务 API 地址与密钥
-- 默认租户与演示 API Key
-- 日志级别、存储路径、服务监听端口
+- 宿主系统把运行时作为子应用挂载，或在进程内直接调用 facade。
+- 宿主系统可以注册自定义 `AuthBridgePlugin`。
+- 平台复用宿主登录态与租户/权限上下文。
 
-### 5.2 运行时动态配置
+## 7. 部署形态
 
-- Prompt 模板
-- 风险词与人工转接阈值
-- 路由策略优先级
-- 知识检索 `top_k` 与召回阈值
+### 7.1 当前交付形态
 
-## 6. 部署思路
+- 单体 FastAPI 参考实现
+- 本地 JSON 持久化
+- 可选 OpenAI / Qdrant / HTTP Business Adapter
 
-### 6.1 单体参考部署
-
-- 一个 FastAPI 服务承载全部控制面与本地默认提供商
-- 适合本地开发、集成验证、功能演示
-
-### 6.2 生产拆分部署
+### 7.2 Future Target
 
 - API Gateway / Channel Gateway
 - Core Orchestrator
-- Knowledge & Vector Service
 - Voice Runtime
 - RTC Gateway
-- Operator Console / Ops API
+- Ops API / Console
+- 独立知识与向量服务
 
-当前仓库交付的是单体参考实现，保留了抽象接口和适配边界，便于后续按域拆分。
+## 8. 关键原则
 
-## 7. 关键设计原则
-
-- 统一使用 `tenant_id`、`session_id`、`knowledge_base_id`
-- `session` 承载可恢复对话上下文，不与 `conversation` 混用
-- 事件总线只用于控制面或离线任务，不用于实时语音热路径
-- 文本、语音、RTC 共用同一业务路由和会话引擎
-- 业务查询不允许粗暴走 RAG，必须通过工具或业务 API
-
+- 主对象统一使用 `tenant_id`、`session_id`、`knowledge_base_id`。
+- `session` 承载可恢复上下文，不与 `conversation` 混用。
+- 实时语音热路径不经过事件总线。
+- 静态知识与实时业务数据必须分离处理。
+- 认证与上下文映射必须插件化，不把宿主逻辑写死到主流程。

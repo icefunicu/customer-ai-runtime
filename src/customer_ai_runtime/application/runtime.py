@@ -37,6 +37,7 @@ class RuntimeConfigService:
             ),
         )
         self._policies = PolicyConfig()
+        self._plugin_states: dict[str, bool] = {}
         self._load()
 
     def get_prompts(self) -> PromptConfig:
@@ -55,6 +56,14 @@ class RuntimeConfigService:
         self._flush()
         return self.get_policies()
 
+    def get_plugin_states(self) -> dict[str, bool]:
+        return dict(self._plugin_states)
+
+    def set_plugin_state(self, plugin_id: str, enabled: bool) -> dict[str, bool]:
+        self._plugin_states[plugin_id] = enabled
+        self._flush()
+        return self.get_plugin_states()
+
     def _load(self) -> None:
         if not self._storage_path or not self._storage_path.exists():
             return
@@ -63,6 +72,8 @@ class RuntimeConfigService:
             self._prompts = PromptConfig.model_validate(payload["prompts"])
         if "policies" in payload:
             self._policies = PolicyConfig.model_validate(payload["policies"])
+        if "plugin_states" in payload:
+            self._plugin_states = {str(key): bool(value) for key, value in payload["plugin_states"].items()}
 
     def _flush(self) -> None:
         if not self._storage_path:
@@ -72,6 +83,7 @@ class RuntimeConfigService:
                 {
                     "prompts": self._prompts.model_dump(mode="json"),
                     "policies": self._policies.model_dump(mode="json"),
+                    "plugin_states": self._plugin_states,
                 },
                 ensure_ascii=False,
                 indent=2,

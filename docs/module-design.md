@@ -1,273 +1,294 @@
-# 模块设计与接口设计
+# 模块设计
 
-## 1. 设计原则
+## 1. 模块总览
 
-- 模块低耦合、高内聚
-- 抽象接口与提供商实现分离
-- 所有入口统一做租户、参数和范围校验
-- 所有状态变更都记录诊断事件与关键指标
+| 模块 | 职责 | 输入 | 输出 |
+| --- | --- | --- | --- |
+| Session Service | 会话创建、恢复、状态流转 | `tenant_id`、`session_id`、消息 | `Session` |
+| Route Orchestrator | 路由分类与策略编排 | 消息、上下文、行业 | `RouteDecision` |
+| Knowledge Service | 知识库、切片、检索 | 文档、查询、知识域 | Chunk / Citation |
+| Tool Service | 业务工具调度 | 工具名、参数、上下文 | `BusinessResult` |
+| Voice Service | ASR + 文本链路 + TTS | 音频载荷 | 文本结果 + 音频结果 |
+| RTC Service | 房间与通话状态机 | RTC 事件 | RTC 输出事件 |
+| Handoff Service | 转人工策略与交接包 | 会话、原因、策略 | `HandoffPackage` |
+| Auth Service | API Key / Host Bridge 认证 | Header / Cookie / Token | `AuthContext` |
+| Plugin Registry | 插件注册、发现、启停、优先级 | 插件元数据 | 可执行插件集合 |
+| Business Context Builder | 合并宿主、页面、行为、会话上下文 | 请求与宿主上下文 | `BusinessContext` |
+| Knowledge Domain Manager | 解析知识域与知识库选择 | 租户、行业、场景 | 域配置 |
+| Response Enhancement Orchestrator | 回复后处理与结构化输出 | 原始回复、上下文 | 增强后回复 |
 
-## 2. 核心领域对象
+## 2. 领域对象
 
-### 2.1 Session
+### 2.1 核心标识
 
-- 标识：`tenant_id`、`session_id`
-- 属性：渠道、当前状态、历史消息、摘要、最近意图、是否等待人工
-- 状态：
-  - `active`
-  - `waiting_human`
-  - `human_in_service`
-  - `closed`
+- `tenant_id`
+- `session_id`
+- `knowledge_base_id`
+- `room_id`
+- `plugin_id`
 
-### 2.2 RTC Session
+### 2.2 关键模型
 
-- 标识：`tenant_id`、`session_id`、`room_id`
-- 状态：
-  - `created`
-  - `joined`
-  - `listening`
-  - `thinking`
-  - `speaking`
-  - `waiting_human`
-  - `ended`
+- `Session`
+- `Message`
+- `RouteDecision`
+- `KnowledgeBase`
+- `KnowledgeDocument`
+- `KnowledgeChunk`
+- `BusinessResult`
+- `HandoffPackage`
+- `RTCRoom`
+- `HostAuthContext`
+- `BusinessContext`
+- `PluginDescriptor`
 
-### 2.3 Knowledge Base
+## 3. 会话管理模块
 
-- 标识：`tenant_id`、`knowledge_base_id`
-- 属性：名称、描述、文档集、切片索引、检索参数
+### 输入
 
-## 3. 模块职责
+- `tenant_id`
+- `session_id`
+- `channel`
+- `message`
 
-## 3.1 Session 模块
+### 输出
 
-输入：
+- 当前会话
+- 消息历史
+- 当前状态
 
-- 新消息
-- 语音识别结果
-- RTC 房间控制事件
+### 状态机
 
-输出：
+- `active`
+- `waiting_human`
+- `human_in_service`
+- `closed`
 
-- 会话创建/恢复结果
-- 历史上下文
-- 状态变更
+### 异常处理
 
-错误处理：
+- 缺失 `tenant_id` 返回 `validation_error`
+- 非法 `session_id` 返回 `not_found`
+- 越权访问返回 `forbidden`
 
-- 缺失 `tenant_id` 或非法 `session_id` 返回 `400`
-- 访问不存在会话返回 `404`
-- 跨租户访问返回 `403`
+## 4. 路由模块
 
-## 3.2 Route / Policy 模块
-
-输入：
+### 输入
 
 - 用户消息
-- 渠道类型
-- 会话上下文
-- 运行时策略配置
+- 行业类型
+- 宿主上下文
+- 历史摘要
 
-输出：
+### 输出
 
 - `knowledge`
 - `business`
 - `handoff`
 - `risk`
+- `plugin`
 - `fallback`
 
-规则：
+### 扩展方式
 
-- 用户要求人工、投诉、退款争议、法律/安全等高风险优先转人工
-- 命中订单/物流/售后/账号意图时优先走业务工具
-- FAQ、规则说明、政策说明优先走 RAG
+- `RouteStrategyPlugin`
+- 行业适配器可提供路由提示
+- 风险插件可覆盖默认路由结果
 
-## 3.3 RAG 模块
+## 5. RAG 模块
 
-输入：
+### 输入
 
-- 文档内容
-- 知识库配置
-- 查询文本
+- `tenant_id`
+- `knowledge_base_id`
+- `query`
+- `top_k`
+- `min_score`
 
-输出：
+### 输出
 
-- 文档切片
-- 检索命中结果
-- 引用来源
-- 拼接后的上下文
+- 切片结果
+- 检索命中
+- 引用列表
 
-错误处理：
+### 扩展方式
 
-- 空文档/超大文档返回 `400`
-- 不存在知识库返回 `404`
-- 未命中时显式返回空检索分支
+- 向量库适配层
+- 知识域管理器
+- 不同行业可使用不同知识域组合
 
-## 3.4 LLM 编排模块
+## 6. 业务工具模块
 
-输入：
+### 输入
 
-- 路由结果
-- Prompt 模板
-- 会话历史
-- RAG 结果
-- 工具结果
+- 工具名
+- 参数
+- 行业
+- 宿主身份
+- 页面 / 业务对象上下文
 
-输出：
-
-- 文本回复
-- 置信度
-- 下一步动作
-- 引用来源
-
-职责：
-
-- Prompt 组装
-- 检索与工具结果融合
-- 流式或分段回复
-- 低置信度兜底
-
-## 3.5 ASR 模块
-
-输入：
-
-- 音频字节或音频片段
-- 内容类型
-- 可选转录提示
-
-输出：
-
-- 识别文本
-- 识别置信度
-- 是否为增量结果
-
-## 3.6 TTS 模块
-
-输入：
-
-- 回复文本
-- 语音参数
-
-输出：
-
-- 音频字节
-- 音频编码格式
-- 分片列表
-
-## 3.7 RTC 模块
-
-输入：
-
-- 房间创建/加入/退出事件
-- 音频输入
-- 打断/超时/结束事件
-
-输出：
-
-- 房间状态
-- 事件回推
-- 通话摘要
-
-关键约束：
-
-- 音频热路径只通过 WebSocket/RTC 控制通道处理
-- 事件总线不承载实时音频分片
-
-## 3.8 业务 API / 工具模块
-
-输入：
-
-- 标准化业务查询请求
-- 业务实体标识
-
-输出：
+### 输出
 
 - 结构化业务结果
-- 对用户可读的安全摘要
+- 可向用户展示的摘要
+- 是否建议转人工
 
-工具范围：
+### 扩展方式
 
-- `order_status`
-- `after_sale_status`
-- `logistics_tracking`
-- `account_lookup`
+- `BusinessToolPlugin`
+- `BusinessAdapter`
+- 行业适配器提供默认工具集合
 
-## 3.9 Operator / Console 模块
+## 7. 语音模块
 
-输入：
+### 输入
 
-- Prompt 配置变更
-- 路由阈值变更
-- 会话筛选条件
+- `audio_base64`
+- `content_type`
+- `transcript_hint`
 
-输出：
+### 输出
 
-- 当前配置
-- 指标统计
-- 故障诊断结果
+- `transcript`
+- `asr_confidence`
+- `audio_response_base64`
+- `audio_format`
 
-## 4. 抽象接口契约
+### 状态
 
-### 4.1 LLM Provider
+- 接收音频
+- ASR 识别
+- 文本链路处理
+- TTS 输出
 
-```python
-async def generate(request: LLMRequest) -> LLMResponse
-```
+## 8. RTC 模块
 
-### 4.2 ASR Provider
+### 输入事件
 
-```python
-async def transcribe(request: ASRRequest) -> ASRResult
-```
+- `join`
+- `user_audio`
+- `interrupt`
+- `request_human`
+- `end`
 
-### 4.3 TTS Provider
+### 输出事件
 
-```python
-async def synthesize(request: TTSRequest) -> TTSResult
-```
+- `room_joined`
+- `transcript`
+- `assistant_message`
+- `assistant_audio`
+- `state_changed`
+- `handoff`
+- `ended`
+- `error`
 
-### 4.4 Vector Store Provider
+### 状态机
 
-```python
-async def upsert(chunks: list[KnowledgeChunk]) -> None
-async def search(query: str, top_k: int, tenant_id: str, knowledge_base_id: str) -> list[RetrievalHit]
-```
+- `created`
+- `joined`
+- `listening`
+- `thinking`
+- `speaking`
+- `waiting_human`
+- `ended`
 
-### 4.5 Business Adapter
+## 9. Auth Bridge 模块
 
-```python
-async def execute(query: BusinessQuery) -> BusinessResult
-```
+### 输入
 
-## 5. 错误码策略
+- Header
+- Cookie
+- Query
+- 宿主票据
 
-- `validation_error`: 参数校验失败
-- `auth_error`: 鉴权失败
-- `not_found`: 对象不存在
-- `provider_error`: 外部提供商调用失败
-- `policy_blocked`: 被策略拒绝
-- `handoff_required`: 必须转人工
-- `rtc_state_error`: RTC 状态非法
+### 输出
 
-## 6. 状态机设计
+- `HostAuthContext`
+- 平台访问角色
+- 宿主身份与权限映射结果
 
-### 6.1 文本/语音会话状态机
+### 支持模式
 
-```text
-active -> waiting_human -> human_in_service -> closed
-active -> closed
-```
+- API Key
+- Session / Cookie
+- JWT / Bearer
+- Custom Token
+- 自定义桥接插件
 
-### 6.2 RTC 通话状态机
+### 失败策略
 
-```text
-created -> joined -> listening -> thinking -> speaking -> listening
-listening/thinking/speaking -> waiting_human
-任意非 ended 状态 -> ended
-```
+- 未认证返回 `auth_error`
+- 租户不匹配返回 `forbidden`
+- 宿主票据解析失败返回 `host_auth_error`
 
-## 7. 扩展方式
+## 10. 插件系统模块
 
-- 增加新 LLM/ASR/TTS/RTC 提供商时，只实现对应抽象接口并在工厂注册
-- 增加新业务工具时，在 `ToolService` 注册工具名与输入校验
-- 增加新渠道时，复用统一 `MessageProcessingService`
+### 核心抽象
 
+- `Plugin`
+- `PluginRegistry`
+- `PluginContext`
+- `RouteStrategyPlugin`
+- `BusinessToolPlugin`
+- `HumanHandoffPlugin`
+- `IndustryAdapterPlugin`
+- `AuthBridgePlugin`
+- `ContextEnricherPlugin`
+- `ResponsePostProcessorPlugin`
+
+### 生命周期
+
+- 注册
+- 启用
+- 禁用
+- 卸载
+- 启动
+- 关闭
+
+### 插件执行原则
+
+- 按优先级排序
+- 支持租户、行业、渠道装配
+- 插件失败时回退到默认实现
+
+## 11. 业务增强模块
+
+### Business Context Builder
+
+- 合并宿主身份、页面上下文、业务对象、用户画像、最近行为、会话摘要
+
+### Knowledge Domain Manager
+
+- 维护 `tenant_id + industry + scenario -> knowledge domains`
+
+### Real-time Business Data Provider
+
+- 通过工具插件或业务适配器读取动态数据
+
+### Response Enhancement Orchestrator
+
+- 回复格式化
+- 引用附加
+- 脱敏
+- 多语言
+- 结构化输出
+
+## 12. 管理模块
+
+### 管理对象
+
+- Prompt
+- Policy
+- Metrics
+- Diagnostics
+- Plugin 状态
+- Provider 健康状态
+
+### 失败方式
+
+- 非管理员返回 `forbidden`
+- 配置校验失败返回 `validation_error`
+
+## 13. 与 Future Target 的边界
+
+- 当前交付以单体参考实现为主。
+- 文档中的多服务拆分、独立控制台等属于 future target，不宣称当前仓库已落地。

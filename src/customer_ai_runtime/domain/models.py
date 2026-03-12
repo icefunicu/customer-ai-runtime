@@ -45,6 +45,7 @@ class RouteType(str, Enum):
     BUSINESS = "business"
     HANDOFF = "handoff"
     RISK = "risk"
+    PLUGIN = "plugin"
     FALLBACK = "fallback"
 
 
@@ -178,6 +179,7 @@ class LLMRequest(BaseModel):
     citations: list[Citation] = Field(default_factory=list)
     tool_result: BusinessResult | None = None
     prompt_template: str
+    business_context: dict[str, Any] = Field(default_factory=dict)
 
 
 class LLMResponse(BaseModel):

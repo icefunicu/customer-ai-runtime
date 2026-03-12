@@ -32,9 +32,13 @@ from customer_ai_runtime.providers.base import (
 
 class LocalLLMProvider(LLMProvider):
     async def generate(self, request: LLMRequest) -> LLMResponse:
+        industry = request.business_context.get("industry")
+        context_hint = ""
+        if industry:
+            context_hint = f" 当前行业上下文为 {industry}。"
         if request.route.value in {"handoff", "risk"}:
             return LLMResponse(
-                answer="已为您转接人工客服，请稍候，人工客服将参考当前会话摘要继续为您处理。",
+                answer=f"已为您转接人工客服，请稍候，人工客服将参考当前会话摘要继续为您处理。{context_hint}",
                 confidence=0.98,
                 suggested_actions=["wait_for_human"],
                 citations=request.citations,
@@ -43,7 +47,7 @@ class LocalLLMProvider(LLMProvider):
             return LLMResponse(
                 answer=(
                     f"{request.tool_result.summary} 如果还需要更详细的处理，我可以继续帮您查询，"
-                    "或者直接为您转接人工客服。"
+                    f"或者直接为您转接人工客服。{context_hint}"
                 ),
                 confidence=0.88 if request.tool_result.status == "success" else 0.52,
                 citations=request.citations,
@@ -54,14 +58,14 @@ class LocalLLMProvider(LLMProvider):
             return LLMResponse(
                 answer=(
                     f"根据知识库《{citation_titles}》的内容，{request.citations[0].excerpt}"
-                    " 如果您需要我进一步结合订单或售后状态处理，我可以继续查询业务系统。"
+                    f" 如果您需要我进一步结合订单或售后状态处理，我可以继续查询业务系统。{context_hint}"
                 ),
                 confidence=0.79,
                 citations=request.citations,
                 suggested_actions=["business_query", "handoff"],
             )
         return LLMResponse(
-            answer="我暂时没有足够信息给出确定答复，建议补充订单号、售后单号或转人工处理。",
+            answer=f"我暂时没有足够信息给出确定答复，建议补充订单号、售后单号或转人工处理。{context_hint}",
             confidence=0.32,
             suggested_actions=["provide_identifier", "handoff"],
         )
@@ -165,6 +169,27 @@ class LocalBusinessAdapter(BusinessAdapter):
         self._accounts = {
             "ACC-3001": {"level": "gold", "points": 1580, "status": "active"},
         }
+        self._subscriptions = {
+            "SUB-4001": {"plan": "enterprise", "status": "active", "renew_at": "2026-09-01"},
+        }
+        self._tickets = {
+            "TK-5001": {"status": "处理中", "owner": "企业客服组", "updated_at": "2026-03-12 10:20"},
+        }
+        self._courses = {
+            "COURSE-6001": {"title": "Python 实战课", "valid_until": "2026-12-31", "status": "available"},
+        }
+        self._progress = {
+            "STU-7001": {"progress": "68%", "last_lesson": "第 12 章", "exam_status": "未完成"},
+        }
+        self._waybills = {
+            "WB-8001": {"status": "派送中", "latest": "2026-03-12 12:00 快件派送中"},
+        }
+        self._claims = {
+            "CLM-9001": {"status": "审核中", "updated_at": "2026-03-11 17:30"},
+        }
+        self._crm_profiles = {
+            "CUS-10001": {"level": "VIP", "owner": "客户成功组", "last_follow_up": "2026-03-10"},
+        }
 
     async def execute(self, query: BusinessQuery) -> BusinessResult:
         parameters = query.parameters
@@ -266,6 +291,175 @@ class LocalBusinessAdapter(BusinessAdapter):
                 summary=(
                     f"账号 {account_id} 当前状态 {result['status']}，"
                     f"会员等级 {result['level']}，积分 {result['points']}。"
+                ),
+                data=result,
+                integration_context=query.integration_context,
+            )
+        if tool_name == "subscription_lookup":
+            subscription_id = parameters.get("subscription_id")
+            if not subscription_id:
+                return BusinessResult(
+                    tool_name=tool_name,
+                    status="missing_parameter",
+                    summary="请提供订阅编号，例如 SUB-4001。",
+                )
+            result = self._subscriptions.get(subscription_id)
+            if not result:
+                return BusinessResult(
+                    tool_name=tool_name,
+                    status="not_found",
+                    summary=f"未找到订阅 {subscription_id}。",
+                )
+            return BusinessResult(
+                tool_name=tool_name,
+                status="success",
+                summary=(
+                    f"订阅 {subscription_id} 当前套餐 {result['plan']}，状态 {result['status']}，"
+                    f"续费时间 {result['renew_at']}。"
+                ),
+                data=result,
+                integration_context=query.integration_context,
+            )
+        if tool_name == "ticket_lookup":
+            ticket_id = parameters.get("ticket_id")
+            if not ticket_id:
+                return BusinessResult(
+                    tool_name=tool_name,
+                    status="missing_parameter",
+                    summary="请提供工单编号，例如 TK-5001。",
+                )
+            result = self._tickets.get(ticket_id)
+            if not result:
+                return BusinessResult(
+                    tool_name=tool_name,
+                    status="not_found",
+                    summary=f"未找到工单 {ticket_id}。",
+                )
+            return BusinessResult(
+                tool_name=tool_name,
+                status="success",
+                summary=(
+                    f"工单 {ticket_id} 当前状态 {result['status']}，负责人 {result['owner']}，"
+                    f"最近更新时间 {result['updated_at']}。"
+                ),
+                data=result,
+                integration_context=query.integration_context,
+            )
+        if tool_name == "course_lookup":
+            course_id = parameters.get("course_id")
+            if not course_id:
+                return BusinessResult(
+                    tool_name=tool_name,
+                    status="missing_parameter",
+                    summary="请提供课程编号，例如 COURSE-6001。",
+                )
+            result = self._courses.get(course_id)
+            if not result:
+                return BusinessResult(
+                    tool_name=tool_name,
+                    status="not_found",
+                    summary=f"未找到课程 {course_id}。",
+                )
+            return BusinessResult(
+                tool_name=tool_name,
+                status="success",
+                summary=(
+                    f"课程 {course_id} 标题为《{result['title']}》，当前状态 {result['status']}，"
+                    f"有效期至 {result['valid_until']}。"
+                ),
+                data=result,
+                integration_context=query.integration_context,
+            )
+        if tool_name == "progress_lookup":
+            student_id = parameters.get("student_id")
+            if not student_id:
+                return BusinessResult(
+                    tool_name=tool_name,
+                    status="missing_parameter",
+                    summary="请提供学员编号，例如 STU-7001。",
+                )
+            result = self._progress.get(student_id)
+            if not result:
+                return BusinessResult(
+                    tool_name=tool_name,
+                    status="not_found",
+                    summary=f"未找到学员进度 {student_id}。",
+                )
+            return BusinessResult(
+                tool_name=tool_name,
+                status="success",
+                summary=(
+                    f"学员 {student_id} 当前学习进度 {result['progress']}，"
+                    f"最近学习到 {result['last_lesson']}，考试状态 {result['exam_status']}。"
+                ),
+                data=result,
+                integration_context=query.integration_context,
+            )
+        if tool_name == "waybill_lookup":
+            waybill_id = parameters.get("waybill_id")
+            if not waybill_id:
+                return BusinessResult(
+                    tool_name=tool_name,
+                    status="missing_parameter",
+                    summary="请提供运单编号，例如 WB-8001。",
+                )
+            result = self._waybills.get(waybill_id)
+            if not result:
+                return BusinessResult(
+                    tool_name=tool_name,
+                    status="not_found",
+                    summary=f"未找到运单 {waybill_id}。",
+                )
+            return BusinessResult(
+                tool_name=tool_name,
+                status="success",
+                summary=f"运单 {waybill_id} 当前状态 {result['status']}，最新节点：{result['latest']}。",
+                data=result,
+                integration_context=query.integration_context,
+            )
+        if tool_name == "claim_lookup":
+            claim_id = parameters.get("claim_id")
+            if not claim_id:
+                return BusinessResult(
+                    tool_name=tool_name,
+                    status="missing_parameter",
+                    summary="请提供理赔单号，例如 CLM-9001。",
+                )
+            result = self._claims.get(claim_id)
+            if not result:
+                return BusinessResult(
+                    tool_name=tool_name,
+                    status="not_found",
+                    summary=f"未找到理赔单 {claim_id}。",
+                )
+            return BusinessResult(
+                tool_name=tool_name,
+                status="success",
+                summary=f"理赔单 {claim_id} 当前状态 {result['status']}，最近更新时间 {result['updated_at']}。",
+                data=result,
+                integration_context=query.integration_context,
+            )
+        if tool_name == "crm_profile":
+            customer_id = parameters.get("customer_id")
+            if not customer_id:
+                return BusinessResult(
+                    tool_name=tool_name,
+                    status="missing_parameter",
+                    summary="请提供客户编号，例如 CUS-10001。",
+                )
+            result = self._crm_profiles.get(customer_id)
+            if not result:
+                return BusinessResult(
+                    tool_name=tool_name,
+                    status="not_found",
+                    summary=f"未找到客户 {customer_id}。",
+                )
+            return BusinessResult(
+                tool_name=tool_name,
+                status="success",
+                summary=(
+                    f"客户 {customer_id} 当前等级 {result['level']}，"
+                    f"归属 {result['owner']}，最近跟进时间 {result['last_follow_up']}。"
                 ),
                 data=result,
                 integration_context=query.integration_context,

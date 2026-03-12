@@ -5,9 +5,18 @@ from typing import Any
 
 from customer_ai_runtime.application.access import AccessControlService
 from customer_ai_runtime.application.admin import AdminService
+from customer_ai_runtime.application.auth import AuthService, build_builtin_auth_plugins
+from customer_ai_runtime.application.business import (
+    BusinessContextBuilder,
+    IndustryService,
+    KnowledgeDomainManager,
+    RealTimeBusinessDataProvider,
+    ResponseEnhancementOrchestrator,
+)
 from customer_ai_runtime.application.chat import ChatService
 from customer_ai_runtime.application.handoff import HandoffService
 from customer_ai_runtime.application.knowledge import KnowledgeService
+from customer_ai_runtime.application.plugins import PluginRegistry, build_builtin_plugins
 from customer_ai_runtime.application.routing import RoutingService
 from customer_ai_runtime.application.runtime import DiagnosticsService, MetricsService, RuntimeConfigService
 from customer_ai_runtime.application.session import SessionService
@@ -26,9 +35,14 @@ from customer_ai_runtime.repositories.memory import InMemoryDiagnosticsRepositor
 @dataclass
 class Container:
     settings: Settings
+    runtime_config: RuntimeConfigService
+    plugin_registry: PluginRegistry
+    auth_service: AuthService
     access_control: AccessControlService
     session_service: SessionService
     knowledge_service: KnowledgeService
+    business_context_builder: BusinessContextBuilder
+    knowledge_domain_manager: KnowledgeDomainManager
     tool_catalog: ToolCatalogService
     tool_service: ToolService
     chat_service: ChatService
@@ -63,28 +77,45 @@ def build_container(settings: Settings, overrides: ContainerOverrides | None = N
     runtime_config = RuntimeConfigService(settings.storage_root)
     metrics = MetricsService()
     diagnostics = DiagnosticsService(diagnostics_repository)
+    plugin_registry = PluginRegistry(
+        persisted_states=runtime_config.get_plugin_states(),
+        on_state_change=runtime_config.set_plugin_state,
+    )
     access_control = AccessControlService()
-    tool_catalog = ToolCatalogService()
 
     llm_provider = overrides.llm_provider or _build_llm_provider(settings)
     asr_provider = overrides.asr_provider or _build_asr_provider(settings)
     tts_provider = overrides.tts_provider or _build_tts_provider(settings)
     vector_store = overrides.vector_store or _build_vector_store(settings)
     business_adapter = overrides.business_adapter or _build_business_adapter(settings)
+    for plugin in build_builtin_auth_plugins(settings):
+        plugin_registry.register(plugin)
+    for plugin in build_builtin_plugins(runtime_config, business_adapter):
+        plugin_registry.register(plugin)
+    auth_service = AuthService(plugin_registry)
+    tool_catalog = ToolCatalogService(plugin_registry)
 
     session_service = SessionService(session_repository, diagnostics)
     knowledge_service = KnowledgeService(knowledge_repository, vector_store)
-    routing_service = RoutingService(runtime_config)
-    tool_service = ToolService(business_adapter, tool_catalog)
-    handoff_service = HandoffService()
+    industry_service = IndustryService(plugin_registry)
+    business_context_builder = BusinessContextBuilder(plugin_registry, industry_service)
+    knowledge_domain_manager = KnowledgeDomainManager(settings.get_knowledge_domain_map())
+    business_data_provider = RealTimeBusinessDataProvider(plugin_registry, business_adapter)
+    routing_service = RoutingService(plugin_registry)
+    tool_service = ToolService(business_data_provider, tool_catalog)
+    handoff_service = HandoffService(plugin_registry)
+    response_enhancement_orchestrator = ResponseEnhancementOrchestrator(plugin_registry)
     chat_service = ChatService(
         session_service=session_service,
         knowledge_service=knowledge_service,
         routing_service=routing_service,
         runtime_config=runtime_config,
+        business_context_builder=business_context_builder,
+        knowledge_domain_manager=knowledge_domain_manager,
         llm_provider=llm_provider,
         tool_service=tool_service,
         handoff_service=handoff_service,
+        response_enhancer=response_enhancement_orchestrator,
         metrics=metrics,
         diagnostics=diagnostics,
     )
@@ -99,12 +130,18 @@ def build_container(settings: Settings, overrides: ContainerOverrides | None = N
         runtime_config=runtime_config,
         metrics=metrics,
         diagnostics=diagnostics,
+        plugin_registry=plugin_registry,
     )
     return Container(
         settings=settings,
+        runtime_config=runtime_config,
+        plugin_registry=plugin_registry,
+        auth_service=auth_service,
         access_control=access_control,
         session_service=session_service,
         knowledge_service=knowledge_service,
+        business_context_builder=business_context_builder,
+        knowledge_domain_manager=knowledge_domain_manager,
         tool_catalog=tool_catalog,
         tool_service=tool_service,
         chat_service=chat_service,
