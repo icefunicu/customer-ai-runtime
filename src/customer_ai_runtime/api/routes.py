@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 
 from customer_ai_runtime.api.schemas import (
@@ -471,10 +471,47 @@ async def get_admin_provider_health(
 @router.get("/api/v1/admin/tools/catalog")
 async def get_admin_tool_catalog(
     request: Request,
+    tenant_id: str | None = Query(default=None, min_length=1, max_length=64),
+    industry: str | None = Query(default=None, min_length=1, max_length=64),
+    channel: str | None = Query(default=None, min_length=1, max_length=64),
+    include_disabled: bool = Query(default=True),
     auth_context: ResolvedAuthContext = Depends(authenticate),
 ) -> JSONResponse:
+    container = get_container(request)
     require_admin(auth_context)
-    return success_response(get_container(request).admin_service.tool_catalog_items())
+    if tenant_id is not None:
+        container.access_control.validate_tenant_access(auth_context, tenant_id)
+    return success_response(
+        container.admin_service.tool_catalog_items(
+            tenant_id=tenant_id,
+            industry=industry,
+            channel=channel,
+            include_disabled=include_disabled,
+        )
+    )
+
+
+@router.get("/api/v1/admin/tools/catalog/categories")
+async def get_admin_tool_catalog_categories(
+    request: Request,
+    tenant_id: str | None = Query(default=None, min_length=1, max_length=64),
+    industry: str | None = Query(default=None, min_length=1, max_length=64),
+    channel: str | None = Query(default=None, min_length=1, max_length=64),
+    include_disabled: bool = Query(default=True),
+    auth_context: ResolvedAuthContext = Depends(authenticate),
+) -> JSONResponse:
+    container = get_container(request)
+    require_admin(auth_context)
+    if tenant_id is not None:
+        container.access_control.validate_tenant_access(auth_context, tenant_id)
+    return success_response(
+        container.admin_service.tool_category_items(
+            tenant_id=tenant_id,
+            industry=industry,
+            channel=channel,
+            include_disabled=include_disabled,
+        )
+    )
 
 
 @router.get("/api/v1/admin/plugins")

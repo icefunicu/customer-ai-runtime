@@ -254,6 +254,45 @@ def test_admin_room_and_knowledge_listing(client: TestClient) -> None:
     assert diagnostics.json()["data"]
 
 
+def test_admin_tool_catalog_filters(client: TestClient) -> None:
+    disable = client.post(
+        "/api/v1/admin/plugins/tool.order_status/disable",
+        headers=ADMIN_HEADERS,
+    )
+    assert disable.status_code == 200
+
+    filtered = client.get(
+        "/api/v1/admin/tools/catalog",
+        headers=ADMIN_HEADERS,
+        params={
+            "tenant_id": "demo-tenant",
+            "industry": "ecommerce",
+            "include_disabled": "false",
+        },
+    )
+    assert filtered.status_code == 200
+    data = filtered.json()["data"]
+    assert data
+    assert all("ecommerce" in item["industry_scopes"] for item in data)
+    assert all(item["enabled"] is True for item in data)
+    assert all(item["name"] != "order_status" for item in data)
+
+
+def test_admin_tool_catalog_categories(client: TestClient) -> None:
+    categories = client.get(
+        "/api/v1/admin/tools/catalog/categories",
+        headers=ADMIN_HEADERS,
+        params={"industry": "ecommerce", "include_disabled": "false"},
+    )
+    assert categories.status_code == 200
+    data = categories.json()["data"]
+    assert data
+    ecommerce = next(item for item in data if item["category"] == "ecommerce")
+    assert ecommerce["tool_count"] >= 2
+    assert ecommerce["enabled_count"] >= 2
+    assert "after_sale_status" in ecommerce["tools"]
+
+
 def test_auth_context_with_api_key(client: TestClient) -> None:
     response = client.get("/api/v1/auth/context", headers=CUSTOMER_HEADERS)
     assert response.status_code == 200

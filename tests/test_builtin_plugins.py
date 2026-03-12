@@ -40,6 +40,36 @@ def test_builtin_plugins_register_concrete_implementations() -> None:
     )
 
 
+def test_tool_catalog_exposes_management_metadata() -> None:
+    _, _, registry = build_registry()
+    catalog = ToolCatalogService(registry)
+
+    order_tool = catalog.get("order_status", industry="ecommerce")
+    categories = catalog.list_categories()
+
+    assert order_tool["plugin_id"] == "tool.order_status"
+    assert order_tool["enabled"] is True
+    assert order_tool["available"] is True
+    assert order_tool["industry_scopes"] == ["ecommerce"]
+    assert order_tool["capabilities"] == ["order_status"]
+    assert any(item["category"] == "ecommerce" for item in categories)
+
+
+def test_tool_catalog_filters_disabled_and_scope_mismatch() -> None:
+    _, _, registry = build_registry()
+    registry.disable("tool.order_status")
+    catalog = ToolCatalogService(registry)
+
+    disabled_tool = catalog.get("order_status", industry="ecommerce")
+    enabled_tools = catalog.list_tools(industry="ecommerce", include_disabled=False)
+
+    assert disabled_tool["enabled"] is False
+    assert disabled_tool["available"] is False
+    assert catalog.get_plugin("order_status", industry="ecommerce", include_disabled=False) is None
+    assert all(item["name"] != "order_status" for item in enabled_tools)
+    assert catalog.get_plugin("order_status", industry="saas") is None
+
+
 @pytest.mark.anyio
 async def test_business_context_builder_enriches_industry_and_context() -> None:
     _, _, registry = build_registry()

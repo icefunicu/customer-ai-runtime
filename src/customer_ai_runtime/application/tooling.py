@@ -22,7 +22,13 @@ class ToolService:
         tool_name: str,
         parameters: dict[str, Any],
     ) -> BusinessResult:
-        plugin = self._catalog.get_plugin(tool_name)
+        plugin = self._catalog.get_plugin(
+            tool_name,
+            tenant_id=business_context.tenant_id,
+            industry=business_context.industry,
+            channel=business_context.channel,
+            include_disabled=False,
+        )
         resolved_parameters = dict(parameters)
         if plugin is not None:
             plugin_context = context_to_plugin_context(
@@ -37,7 +43,13 @@ class ToolService:
             resolved_parameters = plugin.resolve_parameters(plugin_context, parameters)
             missing_parameters = plugin.missing_parameters(plugin_context, parameters)
         else:
-            missing_parameters = self._catalog.validate_parameters(tool_name, parameters)
+            missing_parameters = self._catalog.validate_parameters(
+                tool_name,
+                parameters,
+                tenant_id=business_context.tenant_id,
+                industry=business_context.industry,
+                channel=business_context.channel,
+            )
         if missing_parameters:
             return BusinessResult(
                 tool_name=tool_name,

@@ -276,6 +276,47 @@
 
 ### `GET /api/v1/admin/tools/catalog`
 
+可选查询参数：
+
+- `tenant_id`
+- `industry`
+- `channel`
+- `include_disabled`
+
+返回当前作用域下的工具目录元数据，包括：
+
+- `name`
+- `category`
+- `description`
+- `required_parameters`
+- `optional_parameters`
+- `suggested_context_keys`
+- `plugin_id`
+- `version`
+- `priority`
+- `enabled`
+- `available`
+- `tenant_scopes`
+- `industry_scopes`
+- `channel_scopes`
+- `capabilities`
+
+### `GET /api/v1/admin/tools/catalog/categories`
+
+可选查询参数与 `/api/v1/admin/tools/catalog` 一致：
+
+- `tenant_id`
+- `industry`
+- `channel`
+- `include_disabled`
+
+返回按工具分类聚合后的目录摘要，包括：
+
+- `category`
+- `tool_count`
+- `enabled_count`
+- `tools`
+
 ## 12. 错误码
 
 - `validation_error`

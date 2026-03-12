@@ -93,8 +93,35 @@ class AdminService:
             },
         }
 
-    def tool_catalog_items(self) -> list[dict[str, Any]]:
-        return self.tool_catalog.list_tools()
+    def tool_catalog_items(
+        self,
+        *,
+        tenant_id: str | None = None,
+        industry: str | None = None,
+        channel: str | None = None,
+        include_disabled: bool = True,
+    ) -> list[dict[str, Any]]:
+        return self.tool_catalog.list_tools(
+            tenant_id=tenant_id,
+            industry=industry,
+            channel=channel,
+            include_disabled=include_disabled,
+        )
+
+    def tool_category_items(
+        self,
+        *,
+        tenant_id: str | None = None,
+        industry: str | None = None,
+        channel: str | None = None,
+        include_disabled: bool = True,
+    ) -> list[dict[str, Any]]:
+        return self.tool_catalog.list_categories(
+            tenant_id=tenant_id,
+            industry=industry,
+            channel=channel,
+            include_disabled=include_disabled,
+        )
 
     def list_plugins(self) -> list[dict[str, Any]]:
         return [descriptor.model_dump(mode="json") for descriptor in self.plugin_registry.list_descriptors()]
