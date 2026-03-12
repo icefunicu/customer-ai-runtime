@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from time import perf_counter
+
 from customer_ai_runtime.application.business import (
     BusinessContextBuilder,
     KnowledgeDomainManager,
@@ -55,7 +57,9 @@ class ChatService:
         knowledge_base_id: str | None,
         integration_context: dict | None = None,
         host_auth_context: HostAuthContext | None = None,
+        track_response_timing: bool = True,
     ) -> dict:
+        started_at = perf_counter() if track_response_timing else None
         session = self.session_service.get_or_create(tenant_id, session_id, channel)
         self.session_service.add_message(session, MessageRole.USER, message)
         business_context = await self.business_context_builder.build(
@@ -236,6 +240,9 @@ class ChatService:
                 "route_confidence_band": route_decision.confidence_band,
             },
         )
+        if started_at is not None:
+            duration_ms = max(1, int((perf_counter() - started_at) * 1000))
+            self.session_service.record_response_timing(session, duration_ms)
         self.session_service.save(session)
         self.metrics.increment("chat_requests")
         self.metrics.increment(f"route_{route_decision.route.value}")

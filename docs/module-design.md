@@ -62,6 +62,8 @@
 - `intent_stack`
 - `satisfaction_score`
 - `resolution_status`
+- `first_response_time`
+- `avg_response_time`
 
 ### 状态机
 

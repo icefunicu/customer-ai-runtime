@@ -264,6 +264,89 @@ def test_close_session_can_record_resolution_status(client: TestClient) -> None:
     assert resolution_summary["distribution"]["escalated"] == 1
 
 
+def test_session_tracks_response_timing_for_text_channel(client: TestClient) -> None:
+    first = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "我的订单 ORD-1001 发货了吗",
+        },
+    )
+    assert first.status_code == 200
+    session_id = first.json()["data"]["session_id"]
+
+    second = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "session_id": session_id,
+            "channel": "web",
+            "message": "这个现在到哪了",
+            "integration_context": {
+                "industry": "ecommerce",
+                "page_context": {"page_type": "order_detail"},
+                "business_objects": {"order_id": "ORD-1001"},
+            },
+        },
+    )
+    assert second.status_code == 200
+
+    session = client.get(
+        f"/api/v1/sessions/{session_id}",
+        headers=CUSTOMER_HEADERS,
+        params={"tenant_id": "demo-tenant"},
+    )
+    assert session.status_code == 200
+    session_data = session.json()["data"]
+    assert session_data["first_response_time"] is not None
+    assert session_data["avg_response_time"] is not None
+    assert session_data["response_count"] == 2
+    assert session_data["first_response_time"] >= 1
+    assert session_data["avg_response_time"] >= 1
+
+
+def test_metrics_summary_includes_response_timing_by_channel(client: TestClient) -> None:
+    text_chat = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "订单 ORD-1001 发货了吗",
+        },
+    )
+    assert text_chat.status_code == 200
+
+    transcript = "订单 ORD-1001 发货了吗"
+    voice_turn = client.post(
+        "/api/v1/voice/turn",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "app_voice",
+            "audio_base64": base64.b64encode(transcript.encode("utf-8")).decode("utf-8"),
+            "content_type": "text/plain",
+        },
+    )
+    assert voice_turn.status_code == 200
+
+    summary = client.get(
+        "/api/v1/admin/metrics/summary",
+        headers=ADMIN_HEADERS,
+        params={"tenant_id": "demo-tenant"},
+    )
+    assert summary.status_code == 200
+    response_time_summary = summary.json()["data"]["response_time_summary"]
+    assert response_time_summary["tracked_sessions"] >= 2
+    assert response_time_summary["first_response_avg_ms"] >= 1
+    assert response_time_summary["avg_response_avg_ms"] >= 1
+    assert response_time_summary["channel_breakdown"]["web"]["sessions"] >= 1
+    assert response_time_summary["channel_breakdown"]["app_voice"]["sessions"] >= 1
+
+
 def test_voice_turn_flow(client: TestClient) -> None:
     transcript = "\u8ba2\u5355 ORD-1001 \u53d1\u8d27\u4e86\u5417"
     response = client.post(

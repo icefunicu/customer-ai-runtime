@@ -108,6 +108,9 @@ class Session(BaseModel):
     satisfaction_submitted_at: datetime | None = None
     resolution_status: ResolutionStatus | None = None
     resolution_marked_at: datetime | None = None
+    first_response_time: int | None = None
+    avg_response_time: float | None = None
+    response_count: int = 0
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 

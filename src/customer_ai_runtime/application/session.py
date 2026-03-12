@@ -168,6 +168,24 @@ class SessionService:
             )
         return self.save(session)
 
+    def record_response_timing(
+        self,
+        session: Session,
+        duration_ms: int,
+    ) -> Session:
+        if session.first_response_time is None:
+            session.first_response_time = duration_ms
+        if session.response_count <= 0 or session.avg_response_time is None:
+            session.avg_response_time = float(duration_ms)
+            session.response_count = 1
+        else:
+            total = (session.avg_response_time * session.response_count) + duration_ms
+            session.response_count += 1
+            session.avg_response_time = round(total / session.response_count, 2)
+        session.updated_at = utcnow()
+        self._repository.save(session)
+        return session
+
     def add_human_reply(self, tenant_id: str, session_id: str, content: str) -> Session:
         session = self.get(tenant_id, session_id)
         session.state = SessionState.HUMAN_IN_SERVICE

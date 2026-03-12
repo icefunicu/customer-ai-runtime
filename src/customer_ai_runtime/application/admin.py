@@ -74,6 +74,23 @@ class AdminService:
                 sum(session.satisfaction_score or 0 for session in rated_sessions) / len(rated_sessions),
                 2,
             )
+        tracked_sessions = [session for session in sessions if session.first_response_time is not None]
+        channel_breakdown: dict[str, dict[str, Any]] = {}
+        for channel in {session.channel for session in tracked_sessions}:
+            channel_sessions = [session for session in tracked_sessions if session.channel == channel]
+            channel_breakdown[channel] = {
+                "sessions": len(channel_sessions),
+                "first_response_avg_ms": round(
+                    sum(session.first_response_time or 0 for session in channel_sessions)
+                    / len(channel_sessions),
+                    2,
+                ),
+                "avg_response_avg_ms": round(
+                    sum(session.avg_response_time or 0.0 for session in channel_sessions)
+                    / len(channel_sessions),
+                    2,
+                ),
+            }
         return {
             "tenant_id": tenant_id,
             "counters": self.metrics.snapshot(),
@@ -92,6 +109,24 @@ class AdminService:
             "resolution_summary": {
                 "marked_sessions": len(resolved_sessions),
                 "distribution": dict(resolution_distribution),
+            },
+            "response_time_summary": {
+                "tracked_sessions": len(tracked_sessions),
+                "first_response_avg_ms": None
+                if not tracked_sessions
+                else round(
+                    sum(session.first_response_time or 0 for session in tracked_sessions)
+                    / len(tracked_sessions),
+                    2,
+                ),
+                "avg_response_avg_ms": None
+                if not tracked_sessions
+                else round(
+                    sum(session.avg_response_time or 0.0 for session in tracked_sessions)
+                    / len(tracked_sessions),
+                    2,
+                ),
+                "channel_breakdown": channel_breakdown,
             },
             "diagnostic_summary": {
                 "sample_size": len(diagnostics),

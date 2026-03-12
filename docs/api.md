@@ -87,7 +87,7 @@
 ### `GET /api/v1/sessions/{session_id}`
 
 - 用途：查询会话
-- 返回重点：`last_route`、`last_intent`、`intent_stack`、`satisfaction_score`、`resolution_status`
+- 返回重点：`last_route`、`last_intent`、`intent_stack`、`satisfaction_score`、`resolution_status`、`first_response_time`、`avg_response_time`
 
 ### `GET /api/v1/sessions/{session_id}/messages?tenant_id=demo-tenant`
 
@@ -283,6 +283,7 @@
 - 返回重点：
   - `satisfaction_summary`
   - `resolution_summary`
+  - `response_time_summary`
 
 ### `GET /api/v1/admin/sessions?tenant_id=demo-tenant`
 

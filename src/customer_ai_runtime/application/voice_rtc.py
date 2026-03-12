@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from time import perf_counter
 from typing import Any
 
 from customer_ai_runtime.core.errors import AppError
@@ -41,6 +42,7 @@ class VoiceService:
         integration_context: dict | None = None,
         host_auth_context: HostAuthContext | None = None,
     ) -> dict:
+        started_at = perf_counter()
         asr_result = await self.asr_provider.transcribe(
             ASRRequest(
                 tenant_id=tenant_id,
@@ -57,10 +59,14 @@ class VoiceService:
             knowledge_base_id=knowledge_base_id,
             integration_context=integration_context,
             host_auth_context=host_auth_context,
+            track_response_timing=False,
         )
         tts_result = await self.tts_provider.synthesize(
             TTSRequest(tenant_id=tenant_id, text=chat_result["answer"])
         )
+        session = self.chat_service.session_service.get(tenant_id, chat_result["session_id"])
+        duration_ms = max(1, int((perf_counter() - started_at) * 1000))
+        self.chat_service.session_service.record_response_timing(session, duration_ms)
         self.metrics.increment("voice_turns")
         self.diagnostics.record(
             DiagnosticLevel.INFO,
@@ -70,6 +76,7 @@ class VoiceService:
                 "tenant_id": tenant_id,
                 "session_id": chat_result["session_id"],
                 "channel": channel,
+                "duration_ms": duration_ms,
             },
         )
         return {
