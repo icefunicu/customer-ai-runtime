@@ -216,6 +216,88 @@ class AdminService:
     def get_knowledge_health_report(self, tenant_id: str, knowledge_base_id: str) -> dict[str, Any]:
         return self.knowledge_service.health_report(tenant_id, knowledge_base_id)
 
+    def list_knowledge_versions(self, tenant_id: str, knowledge_base_id: str) -> list[dict[str, Any]]:
+        return [
+            version.model_dump(mode="json")
+            for version in self.knowledge_service.list_versions(tenant_id, knowledge_base_id)
+        ]
+
+    async def create_knowledge_version_snapshot(
+        self,
+        *,
+        tenant_id: str,
+        knowledge_base_id: str,
+        description: str,
+        source_version_id: str | None = None,
+    ) -> dict[str, Any]:
+        version = await self.knowledge_service.create_version_snapshot(
+            tenant_id=tenant_id,
+            knowledge_base_id=knowledge_base_id,
+            description=description,
+            source_version_id=source_version_id,
+        )
+        knowledge_base = self.knowledge_service.get_knowledge_base(tenant_id, knowledge_base_id)
+        return {
+            "knowledge_base": knowledge_base.model_dump(mode="json"),
+            "version": version.model_dump(mode="json"),
+        }
+
+    def activate_knowledge_version(
+        self,
+        *,
+        tenant_id: str,
+        knowledge_base_id: str,
+        version_id: str,
+    ) -> dict[str, Any]:
+        version = self.knowledge_service.activate_version(tenant_id, knowledge_base_id, version_id)
+        knowledge_base = self.knowledge_service.get_knowledge_base(tenant_id, knowledge_base_id)
+        return {
+            "knowledge_base": knowledge_base.model_dump(mode="json"),
+            "version": version.model_dump(mode="json"),
+        }
+
+    def get_chunk_optimization_report(self, tenant_id: str, knowledge_base_id: str) -> dict[str, Any]:
+        miss_queries = [
+            str(event.context.get("query") or "").strip()
+            for event in self.diagnostics_service.query(
+                tenant_id=tenant_id,
+                code_prefix="knowledge.retrieve_miss",
+                limit=50,
+            )
+            if str(event.context.get("knowledge_base_id")) == knowledge_base_id
+            and str(event.context.get("query") or "").strip()
+        ]
+        return self.knowledge_service.chunk_optimization_report(
+            tenant_id,
+            knowledge_base_id,
+            miss_queries=miss_queries,
+        )
+
+    async def apply_chunk_optimization(
+        self,
+        *,
+        tenant_id: str,
+        knowledge_base_id: str,
+        max_tokens: int,
+        overlap: int,
+        description: str = "",
+        activate: bool = True,
+    ) -> dict[str, Any]:
+        result = await self.knowledge_service.apply_chunk_optimization(
+            tenant_id,
+            knowledge_base_id,
+            max_tokens=max_tokens,
+            overlap=overlap,
+            description=description,
+            activate=activate,
+        )
+        return {
+            "knowledge_base": result["knowledge_base"].model_dump(mode="json"),
+            "version": result["version"].model_dump(mode="json"),
+            "document_count": result["document_count"],
+            "chunk_count": result["chunk_count"],
+        }
+
     def get_retrieval_miss_report(
         self,
         *,
@@ -263,6 +345,110 @@ class AdminService:
             "knowledge_base_id": knowledge_base_id,
             "miss_count": sum(counts.values()),
             "top_queries": top_queries,
+        }
+
+    def get_knowledge_effectiveness_report(
+        self,
+        *,
+        tenant_id: str,
+        knowledge_base_id: str | None = None,
+    ) -> dict[str, Any]:
+        events = self.diagnostics_service.query(
+            tenant_id=tenant_id,
+            code_prefix="chat.knowledge_retrieved",
+            limit=500,
+        )
+        filtered_events = [
+            event
+            for event in events
+            if knowledge_base_id is None
+            or str(event.context.get("knowledge_base_id")) == knowledge_base_id
+        ]
+        grouped_events: dict[str, list[Any]] = {}
+        for event in filtered_events:
+            kb_id = str(event.context.get("knowledge_base_id") or "").strip()
+            if not kb_id:
+                continue
+            grouped_events.setdefault(kb_id, []).append(event)
+
+        sessions = self.session_service.list_by_tenant(tenant_id)
+        session_satisfaction: dict[str, list[int]] = {}
+        response_stats: dict[str, dict[str, int]] = {}
+        version_stats: dict[str, Counter[str]] = {}
+        for session in sessions:
+            session_kbs: set[str] = set()
+            for message in session.messages:
+                kb_id = str(message.metadata.get("knowledge_base_id") or "").strip()
+                if not kb_id:
+                    continue
+                session_kbs.add(kb_id)
+                version_id = str(message.metadata.get("knowledge_version_id") or "").strip()
+                if version_id:
+                    version_stats.setdefault(kb_id, Counter())[version_id] += 1
+                kb_stats = response_stats.setdefault(
+                    kb_id,
+                    {
+                        "response_count": 0,
+                        "feedback_count": 0,
+                        "negative_feedback_count": 0,
+                    },
+                )
+                if message.role.value == "assistant":
+                    kb_stats["response_count"] += 1
+                    if message.feedback_type is not None:
+                        kb_stats["feedback_count"] += 1
+                        if message.feedback_type.value in {"downvote", "request_human"}:
+                            kb_stats["negative_feedback_count"] += 1
+            if session.satisfaction_score is not None:
+                for kb_id in session_kbs:
+                    session_satisfaction.setdefault(kb_id, []).append(session.satisfaction_score)
+
+        items: list[dict[str, Any]] = []
+        for kb_id, kb_events in grouped_events.items():
+            kb_stats = response_stats.get(
+                kb_id,
+                {"response_count": 0, "feedback_count": 0, "negative_feedback_count": 0},
+            )
+            effective_hits = sum(1 for event in kb_events if bool(event.context.get("effective_hit")))
+            total_queries = len(kb_events)
+            hit_rate = 0.0 if total_queries == 0 else round(effective_hits / total_queries, 4)
+            satisfaction_scores = session_satisfaction.get(kb_id, [])
+            average_satisfaction = (
+                None
+                if not satisfaction_scores
+                else round(sum(satisfaction_scores) / len(satisfaction_scores), 2)
+            )
+            negative_feedback_rate = (
+                0.0
+                if kb_stats["response_count"] == 0
+                else round(kb_stats["negative_feedback_count"] / kb_stats["response_count"], 4)
+            )
+            items.append(
+                {
+                    "knowledge_base_id": kb_id,
+                    "query_count": total_queries,
+                    "effective_hit_count": effective_hits,
+                    "miss_count": total_queries - effective_hits,
+                    "hit_rate": hit_rate,
+                    "rated_sessions": len(satisfaction_scores),
+                    "average_satisfaction": average_satisfaction,
+                    "response_count": kb_stats["response_count"],
+                    "feedback_count": kb_stats["feedback_count"],
+                    "negative_feedback_count": kb_stats["negative_feedback_count"],
+                    "negative_feedback_rate": negative_feedback_rate,
+                    "active_versions": dict(version_stats.get(kb_id, Counter())),
+                    "recommendation": self._knowledge_effectiveness_recommendation(
+                        hit_rate=hit_rate,
+                        negative_feedback_rate=negative_feedback_rate,
+                        average_satisfaction=average_satisfaction,
+                    ),
+                }
+            )
+        items.sort(key=lambda item: (item["hit_rate"], item["negative_feedback_rate"]))
+        return {
+            "tenant_id": tenant_id,
+            "knowledge_base_id": knowledge_base_id,
+            "knowledge_bases": items,
         }
 
     def list_rooms(self, tenant_id: str) -> list[dict[str, Any]]:
@@ -438,6 +624,21 @@ class AdminService:
 
     def disable_plugin(self, plugin_id: str) -> dict[str, Any]:
         return self.plugin_registry.disable(plugin_id).model_dump(mode="json")
+
+    def _knowledge_effectiveness_recommendation(
+        self,
+        *,
+        hit_rate: float,
+        negative_feedback_rate: float,
+        average_satisfaction: float | None,
+    ) -> str:
+        if hit_rate < 0.5:
+            return "优先补充高频缺口问题，并重新评估切片策略。"
+        if negative_feedback_rate >= 0.25:
+            return "命中率尚可，但回答可用性偏低，建议优化内容表达或业务衔接。"
+        if average_satisfaction is not None and average_satisfaction < 4:
+            return "建议结合满意度回溯知识内容是否过时或缺少操作指引。"
+        return "当前知识库效果稳定，可继续关注新增缺口与版本迭代。"
 
     def _llm_ready(self) -> bool:
         if self.settings.llm_provider == "openai":

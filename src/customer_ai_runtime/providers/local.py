@@ -471,6 +471,7 @@ def citations_from_hits(hits: list[RetrievalHit]) -> list[Citation]:
     return [
         Citation(
             knowledge_base_id=hit.chunk.knowledge_base_id,
+            version_id=hit.chunk.version_id,
             document_id=hit.chunk.document_id,
             title=hit.chunk.title,
             chunk_id=hit.chunk.chunk_id,

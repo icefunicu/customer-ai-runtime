@@ -97,6 +97,8 @@ class ChatService:
         policies = self.runtime_config.get_policies()
         citations = []
         tool_result: BusinessResult | None = None
+        knowledge_version_id: str | None = None
+        effective_hit_count = 0
 
         if route_decision.route == RouteType.BUSINESS and route_decision.tool_name:
             parameters = self.routing_service.extract_tool_parameters(route_decision.tool_name, message)
@@ -129,9 +131,11 @@ class ChatService:
                     query=message,
                     top_k=policies.knowledge_top_k,
                 )
+                knowledge_version_id = citations[0].version_id if citations else None
                 filtered_citations = [
                     citation for citation in citations if citation.score >= policies.knowledge_min_score
                 ]
+                effective_hit_count = len(filtered_citations)
                 if not filtered_citations:
                     top_score = None if not citations else round(citations[0].score, 4)
                     self.diagnostics.record(
@@ -143,11 +147,13 @@ class ChatService:
                             "session_id": session.session_id,
                             "channel": channel,
                             "knowledge_base_id": knowledge_base_id,
+                            "knowledge_version_id": knowledge_version_id,
                             "query": message,
                             "top_score": top_score,
                         },
                     )
                 citations = filtered_citations or citations[:1]
+                knowledge_version_id = citations[0].version_id if citations else knowledge_version_id
                 self.diagnostics.record(
                     DiagnosticLevel.INFO,
                     "chat.knowledge_retrieved",
@@ -156,7 +162,10 @@ class ChatService:
                         "tenant_id": tenant_id,
                         "session_id": session.session_id,
                         "knowledge_base_id": knowledge_base_id,
-                        "hit_count": len(citations),
+                        "knowledge_version_id": knowledge_version_id,
+                        "returned_hit_count": len(citations),
+                        "effective_hit_count": effective_hit_count,
+                        "effective_hit": effective_hit_count > 0,
                     },
                 )
 
@@ -253,6 +262,9 @@ class ChatService:
                 "industry": business_context.industry,
                 "intent": route_decision.intent,
                 "route_confidence_band": route_decision.confidence_band,
+                "knowledge_base_id": knowledge_base_id if route_decision.route == RouteType.KNOWLEDGE else None,
+                "knowledge_version_id": knowledge_version_id,
+                "knowledge_effective_hit": effective_hit_count > 0 if route_decision.route == RouteType.KNOWLEDGE else None,
             },
         )
         if started_at is not None:

@@ -9,9 +9,12 @@ from customer_ai_runtime.api.schemas import (
     ContextResolveRequest,
     HandoffRequest,
     HumanReplyRequest,
+    KnowledgeChunkOptimizationApplyRequest,
     KnowledgeBaseCreateRequest,
     KnowledgeDocumentCreateRequest,
     KnowledgeSearchRequest,
+    KnowledgeVersionActivateRequest,
+    KnowledgeVersionSnapshotRequest,
     MessageFeedbackRequest,
     PolicyUpdateRequest,
     PromptUpdateRequest,
@@ -320,6 +323,98 @@ async def add_knowledge_document(
     )
 
 
+@router.get("/api/v1/admin/knowledge-bases/{knowledge_base_id}/versions")
+async def list_admin_knowledge_versions(
+    knowledge_base_id: str,
+    tenant_id: str,
+    request: Request,
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
+) -> JSONResponse:
+    container = get_container(request)
+    require_admin(auth_context)
+    container.access_control.validate_tenant_access(auth_context, tenant_id)
+    return success_response(
+        container.admin_service.list_knowledge_versions(tenant_id, knowledge_base_id)
+    )
+
+
+@router.post("/api/v1/admin/knowledge-bases/{knowledge_base_id}/versions/snapshot")
+async def create_admin_knowledge_version_snapshot(
+    knowledge_base_id: str,
+    payload: KnowledgeVersionSnapshotRequest,
+    request: Request,
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
+) -> JSONResponse:
+    container = get_container(request)
+    require_admin(auth_context)
+    container.access_control.validate_tenant_access(auth_context, payload.tenant_id)
+    return success_response(
+        await container.admin_service.create_knowledge_version_snapshot(
+            tenant_id=payload.tenant_id,
+            knowledge_base_id=knowledge_base_id,
+            description=payload.description,
+            source_version_id=payload.source_version_id,
+        )
+    )
+
+
+@router.post("/api/v1/admin/knowledge-bases/{knowledge_base_id}/versions/{version_id}/activate")
+async def activate_admin_knowledge_version(
+    knowledge_base_id: str,
+    version_id: str,
+    payload: KnowledgeVersionActivateRequest,
+    request: Request,
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
+) -> JSONResponse:
+    container = get_container(request)
+    require_admin(auth_context)
+    container.access_control.validate_tenant_access(auth_context, payload.tenant_id)
+    return success_response(
+        container.admin_service.activate_knowledge_version(
+            tenant_id=payload.tenant_id,
+            knowledge_base_id=knowledge_base_id,
+            version_id=version_id,
+        )
+    )
+
+
+@router.get("/api/v1/admin/knowledge-bases/{knowledge_base_id}/chunk-optimization")
+async def get_admin_knowledge_chunk_optimization(
+    knowledge_base_id: str,
+    tenant_id: str,
+    request: Request,
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
+) -> JSONResponse:
+    container = get_container(request)
+    require_admin(auth_context)
+    container.access_control.validate_tenant_access(auth_context, tenant_id)
+    return success_response(
+        container.admin_service.get_chunk_optimization_report(tenant_id, knowledge_base_id)
+    )
+
+
+@router.post("/api/v1/admin/knowledge-bases/{knowledge_base_id}/chunk-optimization/apply")
+async def apply_admin_knowledge_chunk_optimization(
+    knowledge_base_id: str,
+    payload: KnowledgeChunkOptimizationApplyRequest,
+    request: Request,
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
+) -> JSONResponse:
+    container = get_container(request)
+    require_admin(auth_context)
+    container.access_control.validate_tenant_access(auth_context, payload.tenant_id)
+    return success_response(
+        await container.admin_service.apply_chunk_optimization(
+            tenant_id=payload.tenant_id,
+            knowledge_base_id=knowledge_base_id,
+            max_tokens=payload.max_tokens,
+            overlap=payload.overlap,
+            description=payload.description,
+            activate=payload.activate,
+        )
+    )
+
+
 @router.post("/api/v1/knowledge-bases/{knowledge_base_id}/search")
 async def search_knowledge_base(
     knowledge_base_id: str,
@@ -618,6 +713,24 @@ async def get_admin_retrieval_miss_report(
             tenant_id=tenant_id,
             knowledge_base_id=knowledge_base_id,
             limit=limit,
+        )
+    )
+
+
+@router.get("/api/v1/admin/knowledge/effectiveness")
+async def get_admin_knowledge_effectiveness_report(
+    request: Request,
+    tenant_id: str,
+    knowledge_base_id: str | None = Query(default=None, min_length=1, max_length=64),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
+) -> JSONResponse:
+    container = get_container(request)
+    require_admin(auth_context)
+    container.access_control.validate_tenant_access(auth_context, tenant_id)
+    return success_response(
+        container.admin_service.get_knowledge_effectiveness_report(
+            tenant_id=tenant_id,
+            knowledge_base_id=knowledge_base_id,
         )
     )
 

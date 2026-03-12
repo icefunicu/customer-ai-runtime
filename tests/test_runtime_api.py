@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import base64
 import hashlib
@@ -130,7 +130,7 @@ def test_chat_route_uses_page_context_for_contextual_question(client: TestClient
         json={
             "tenant_id": "demo-tenant",
             "channel": "web",
-            "message": "这个现在到哪了",
+            "message": "这个现在到哪里？",
             "integration_context": {
                 "industry": "ecommerce",
                 "page_context": {"page_type": "order_detail"},
@@ -192,7 +192,7 @@ def test_message_feedback_records_upvote_and_updates_summary(client: TestClient)
         json={
             "tenant_id": "demo-tenant",
             "channel": "web",
-            "message": "我的订单 ORD-1001 发货了吗",
+            "message": "鎴戠殑璁㈠崟 ORD-1001 鍙戣揣浜嗗悧",
         },
     )
     assert chat.status_code == 200
@@ -239,7 +239,7 @@ def test_message_feedback_can_request_human_handoff(client: TestClient) -> None:
         json={
             "tenant_id": "demo-tenant",
             "channel": "web",
-            "message": "退款规则是什么？",
+            "message": "閫€娆捐鍒欐槸浠€涔堬紵",
             "knowledge_base_id": "kb_support",
         },
     )
@@ -251,7 +251,7 @@ def test_message_feedback_can_request_human_handoff(client: TestClient) -> None:
             json={
                 "tenant_id": "demo-tenant",
                 "channel": "web",
-                "message": "退款规则是什么？",
+                "message": "閫€娆捐鍒欐槸浠€涔堬紵",
                 "knowledge_base_id": "kb_support",
             },
         )
@@ -272,7 +272,7 @@ def test_message_feedback_can_request_human_handoff(client: TestClient) -> None:
         json={
             "tenant_id": "demo-tenant",
             "feedback_type": "request_human",
-            "comment": "这个回答没解决问题，请转人工",
+            "comment": "杩欎釜鍥炵瓟娌¤В鍐抽棶棰橈紝璇疯浆浜哄伐",
         },
     )
     assert feedback.status_code == 200
@@ -289,7 +289,7 @@ def test_close_session_can_record_satisfaction_score(client: TestClient) -> None
         json={
             "tenant_id": "demo-tenant",
             "channel": "web",
-            "message": "我的订单 ORD-1001 发货了吗",
+            "message": "鎴戠殑璁㈠崟 ORD-1001 鍙戣揣浜嗗悧",
         },
     )
     assert chat.status_code == 200
@@ -329,7 +329,7 @@ def test_close_session_can_record_resolution_status(client: TestClient) -> None:
         json={
             "tenant_id": "demo-tenant",
             "channel": "web",
-            "message": "我要转人工客服",
+            "message": "我要人工客服",
         },
     )
     assert chat.status_code == 200
@@ -368,7 +368,7 @@ def test_session_tracks_response_timing_for_text_channel(client: TestClient) -> 
         json={
             "tenant_id": "demo-tenant",
             "channel": "web",
-            "message": "我的订单 ORD-1001 发货了吗",
+            "message": "鎴戠殑璁㈠崟 ORD-1001 鍙戣揣浜嗗悧",
         },
     )
     assert first.status_code == 200
@@ -381,7 +381,7 @@ def test_session_tracks_response_timing_for_text_channel(client: TestClient) -> 
             "tenant_id": "demo-tenant",
             "session_id": session_id,
             "channel": "web",
-            "message": "这个现在到哪了",
+            "message": "这个现在到哪里？",
             "integration_context": {
                 "industry": "ecommerce",
                 "page_context": {"page_type": "order_detail"},
@@ -412,12 +412,12 @@ def test_metrics_summary_includes_response_timing_by_channel(client: TestClient)
         json={
             "tenant_id": "demo-tenant",
             "channel": "web",
-            "message": "订单 ORD-1001 发货了吗",
+            "message": "璁㈠崟 ORD-1001 鍙戣揣浜嗗悧",
         },
     )
     assert text_chat.status_code == 200
 
-    transcript = "订单 ORD-1001 发货了吗"
+    transcript = "璁㈠崟 ORD-1001 鍙戣揣浜嗗悧"
     voice_turn = client.post(
         "/api/v1/voice/turn",
         headers=CUSTOMER_HEADERS,
@@ -539,7 +539,7 @@ def test_admin_runtime_config_hot_update(client: TestClient) -> None:
         json={
             "tenant_id": "demo-tenant",
             "channel": "web",
-            "message": "订单 ORD-1001 发货了吗",
+            "message": "璁㈠崟 ORD-1001 鍙戣揣浜嗗悧",
             "integration_context": {"industry": "ecommerce"},
         },
     )
@@ -606,7 +606,7 @@ def test_admin_retrieval_miss_report(client: TestClient) -> None:
         json={
             "tenant_id": "demo-tenant",
             "channel": "web",
-            "message": "宇宙尽头在哪里？",
+            "message": "Where is the end of the universe?",
             "knowledge_base_id": "kb_support",
         },
     )
@@ -621,7 +621,7 @@ def test_admin_retrieval_miss_report(client: TestClient) -> None:
     data = report.json()["data"]
     assert data["knowledge_base_id"] == "kb_support"
     assert data["miss_count"] >= 1
-    assert any(item["query"] == "宇宙尽头在哪里？" for item in data["top_queries"])
+    assert any(item["query"] == "Where is the end of the universe?" for item in data["top_queries"])
 
 
 def test_admin_session_monitor_and_diagnostics_filters(client: TestClient) -> None:
@@ -631,7 +631,7 @@ def test_admin_session_monitor_and_diagnostics_filters(client: TestClient) -> No
         json={
             "tenant_id": "demo-tenant",
             "channel": "web",
-            "message": "我要转人工客服",
+            "message": "我要人工客服",
         },
     )
     assert chat.status_code == 200
@@ -748,7 +748,7 @@ def test_admin_metrics_summary_and_alerts(client: TestClient) -> None:
         json={
             "tenant_id": "demo-tenant",
             "channel": "web",
-            "message": "我要转人工客服",
+            "message": "我要人工客服",
         },
     )
     assert second_chat.status_code == 200
@@ -798,6 +798,12 @@ def test_context_resolve_with_industry_and_page_context(client: TestClient) -> N
 
 def test_chat_can_return_to_previous_intent_with_session_intent_stack(client: TestClient) -> None:
     seed_knowledge_base(client)
+    policy_update = client.put(
+        "/api/v1/admin/policies",
+        headers=ADMIN_HEADERS,
+        json={"intent_return_keywords": ["还是回到刚才的问题"]},
+    )
+    assert policy_update.status_code == 200
     first = client.post(
         "/api/v1/chat/messages",
         headers=CUSTOMER_HEADERS,
@@ -823,7 +829,7 @@ def test_chat_can_return_to_previous_intent_with_session_intent_stack(client: Te
             "tenant_id": "demo-tenant",
             "session_id": session_id,
             "channel": "web",
-            "message": "帮助中心关于七天无理由退款的一般政策是什么？",
+            "message": "What is the refund policy?",
             "knowledge_base_id": "kb_support",
         },
     )
@@ -875,13 +881,19 @@ def test_session_auth_bridge_chat_flow(tmp_path: Path, monkeypatch: pytest.Monke
     )
     get_settings.cache_clear()
     with TestClient(create_app()) as local_client:
+        policy_update = local_client.put(
+            "/api/v1/admin/policies",
+            headers=ADMIN_HEADERS,
+            json={"business_keyword_map": {"order_status": ["order-check"]}},
+        )
+        assert policy_update.status_code == 200
         local_client.cookies.set("host_session", "sess-1")
         response = local_client.post(
             "/api/v1/chat/messages",
             json={
                 "tenant_id": "demo-tenant",
                 "channel": "web",
-                "message": "我的订单 ORD-1001 发货了吗",
+                "message": "order-check ORD-1001",
                 "integration_context": {"industry": "ecommerce"},
             },
         )
@@ -944,6 +956,12 @@ def test_custom_token_auth_bridge_and_plugin_toggle(tmp_path: Path, monkeypatch:
     )
     get_settings.cache_clear()
     with TestClient(create_app()) as local_client:
+        policy_update = local_client.put(
+            "/api/v1/admin/policies",
+            headers=ADMIN_HEADERS,
+            json={"business_keyword_map": {"order_status": ["order-check"]}},
+        )
+        assert policy_update.status_code == 200
         plugin_list = local_client.get("/api/v1/admin/plugins", headers=ADMIN_HEADERS)
         assert plugin_list.status_code == 200
         plugin_ids = {item["plugin_id"] for item in plugin_list.json()["data"]}
@@ -958,14 +976,14 @@ def test_custom_token_auth_bridge_and_plugin_toggle(tmp_path: Path, monkeypatch:
 
         chat_after_disable = local_client.post(
             "/api/v1/chat/messages",
-            headers={"X-Host-Token": "host-token-1"},
-            json={
-                "tenant_id": "demo-tenant",
-                "channel": "web",
-                "message": "订单 ORD-1001 发货了没",
-                "integration_context": {"industry": "ecommerce"},
-            },
-        )
+                headers={"X-Host-Token": "host-token-1"},
+                    json={
+                        "tenant_id": "demo-tenant",
+                        "channel": "web",
+                        "message": "order-check ORD-1001",
+                        "integration_context": {"industry": "ecommerce"},
+                    },
+            )
         assert chat_after_disable.status_code == 200
         assert chat_after_disable.json()["data"]["route"] == "fallback"
 
@@ -978,14 +996,14 @@ def test_custom_token_auth_bridge_and_plugin_toggle(tmp_path: Path, monkeypatch:
 
         chat_after_enable = local_client.post(
             "/api/v1/chat/messages",
-            headers={"X-Host-Token": "host-token-1"},
-            json={
-                "tenant_id": "demo-tenant",
-                "channel": "web",
-                "message": "订单 ORD-1001 发货了没",
-                "integration_context": {"industry": "ecommerce"},
-            },
-        )
+                headers={"X-Host-Token": "host-token-1"},
+                    json={
+                        "tenant_id": "demo-tenant",
+                        "channel": "web",
+                        "message": "order-check ORD-1001",
+                        "integration_context": {"industry": "ecommerce"},
+                    },
+            )
         assert chat_after_enable.status_code == 200
         data = chat_after_enable.json()["data"]
         assert data["route"] == "business"
@@ -1075,7 +1093,7 @@ def test_persistence_across_app_restart(tmp_path: Path, monkeypatch: pytest.Monk
             json={
                 "tenant_id": "demo-tenant",
                 "channel": "web",
-                "message": "订单 ORD-1001 发货了吗",
+                "message": "璁㈠崟 ORD-1001 鍙戣揣浜嗗悧",
                 "integration_context": {"industry": "ecommerce"},
             },
         )
@@ -1137,15 +1155,207 @@ def test_embedded_module_custom_auth_bridge(tmp_path: Path, monkeypatch: pytest.
     module.mount_to(host_app, prefix="/embedded/customer-ai")
 
     with TestClient(host_app) as host_client:
+        policy_update = host_client.put(
+            "/embedded/customer-ai/api/v1/admin/policies",
+            headers=ADMIN_HEADERS,
+            json={"human_request_keywords": ["human-agent"]},
+        )
+        assert policy_update.status_code == 200
         response = host_client.post(
             "/embedded/customer-ai/api/v1/chat/messages",
             headers={"X-Test-Host-User": "user-custom"},
             json={
                 "tenant_id": "demo-tenant",
                 "channel": "web",
-                "message": "我要人工客服",
+                "message": "human-agent",
             },
         )
         assert response.status_code == 200
         assert response.json()["data"]["route"] == "handoff"
     get_settings.cache_clear()
+
+
+def test_admin_knowledge_version_snapshot_and_activate(client: TestClient) -> None:
+    seed_knowledge_base(client)
+    knowledge_base = client.get(
+        "/api/v1/knowledge-bases/kb_support",
+        headers=CUSTOMER_HEADERS,
+        params={"tenant_id": "demo-tenant"},
+    )
+    assert knowledge_base.status_code == 200
+    original_version_id = knowledge_base.json()["data"]["active_version_id"]
+
+    snapshot = client.post(
+        "/api/v1/admin/knowledge-bases/kb_support/versions/snapshot",
+        headers=ADMIN_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "description": "snapshot before release",
+        },
+    )
+    assert snapshot.status_code == 200
+    snapshot_version_id = snapshot.json()["data"]["version"]["version_id"]
+    assert snapshot.json()["data"]["version"]["status"] == "draft"
+
+    versions = client.get(
+        "/api/v1/admin/knowledge-bases/kb_support/versions",
+        headers=ADMIN_HEADERS,
+        params={"tenant_id": "demo-tenant"},
+    )
+    assert versions.status_code == 200
+    assert len(versions.json()["data"]) >= 2
+
+    activate_snapshot = client.post(
+        f"/api/v1/admin/knowledge-bases/kb_support/versions/{snapshot_version_id}/activate",
+        headers=ADMIN_HEADERS,
+        json={"tenant_id": "demo-tenant"},
+    )
+    assert activate_snapshot.status_code == 200
+    assert activate_snapshot.json()["data"]["knowledge_base"]["active_version_id"] == snapshot_version_id
+    assert activate_snapshot.json()["data"]["version"]["status"] == "active"
+
+    rollback = client.post(
+        f"/api/v1/admin/knowledge-bases/kb_support/versions/{original_version_id}/activate",
+        headers=ADMIN_HEADERS,
+        json={"tenant_id": "demo-tenant"},
+    )
+    assert rollback.status_code == 200
+    assert rollback.json()["data"]["knowledge_base"]["active_version_id"] == original_version_id
+    assert rollback.json()["data"]["version"]["status"] == "active"
+
+
+def test_admin_chunk_optimization_report_and_apply(client: TestClient) -> None:
+    seed_knowledge_base(client)
+    extra_doc = client.post(
+        "/api/v1/knowledge-bases/kb_support/documents",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "title": "optimization guide",
+            "content": " ".join(
+                [
+                    "refund entry is on the order detail page and requests are processed within 24 hours."
+                ]
+                * 20
+            ),
+            "metadata": {"source": "help-center"},
+        },
+    )
+    assert extra_doc.status_code == 200
+
+    report = client.get(
+        "/api/v1/admin/knowledge-bases/kb_support/chunk-optimization",
+        headers=ADMIN_HEADERS,
+        params={"tenant_id": "demo-tenant"},
+    )
+    assert report.status_code == 200
+    report_data = report.json()["data"]
+    assert report_data["candidates"]
+    current_config = report_data["current_config"]
+    selected_config = report_data["recommended_config"]
+    if selected_config == current_config:
+        selected_config = next(
+            item["chunk_config"]
+            for item in report_data["candidates"]
+            if item["chunk_config"] != current_config
+        )
+
+    apply_result = client.post(
+        "/api/v1/admin/knowledge-bases/kb_support/chunk-optimization/apply",
+        headers=ADMIN_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "max_tokens": selected_config["max_tokens"],
+            "overlap": selected_config["overlap"],
+            "description": "apply optimized chunk strategy",
+            "activate": True,
+        },
+    )
+    assert apply_result.status_code == 200
+    apply_data = apply_result.json()["data"]
+    assert apply_data["knowledge_base"]["chunk_max_tokens"] == selected_config["max_tokens"]
+    assert apply_data["knowledge_base"]["chunk_overlap"] == selected_config["overlap"]
+    assert apply_data["version"]["status"] == "active"
+    assert apply_data["chunk_count"] >= 1
+
+
+def test_admin_knowledge_effectiveness_report(client: TestClient) -> None:
+    seed_knowledge_base(client)
+    hit_chat = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "退款规则是什么？",
+            "knowledge_base_id": "kb_support",
+        },
+    )
+    assert hit_chat.status_code == 200
+    session_id = hit_chat.json()["data"]["session_id"]
+
+    messages = client.get(
+        f"/api/v1/sessions/{session_id}/messages",
+        headers=CUSTOMER_HEADERS,
+        params={"tenant_id": "demo-tenant"},
+    )
+    assert messages.status_code == 200
+    assistant_message = next(item for item in messages.json()["data"] if item["role"] == "assistant")
+
+    feedback = client.post(
+        f"/api/v1/sessions/{session_id}/messages/{assistant_message['message_id']}/feedback",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "feedback_type": "downvote",
+            "comment": "需要更详细的退款步骤",
+        },
+    )
+    assert feedback.status_code == 200
+
+    close = client.post(
+        f"/api/v1/sessions/{session_id}/close",
+        headers=ADMIN_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "admin",
+            "satisfaction_score": 4,
+        },
+    )
+    assert close.status_code == 200
+
+    policy_update = client.put(
+        "/api/v1/admin/policies",
+        headers=ADMIN_HEADERS,
+        json={"knowledge_min_score": 0.99},
+    )
+    assert policy_update.status_code == 200
+
+    miss_chat = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "Where is the end of the universe?",
+            "knowledge_base_id": "kb_support",
+        },
+    )
+    assert miss_chat.status_code == 200
+
+    report = client.get(
+        "/api/v1/admin/knowledge/effectiveness",
+        headers=ADMIN_HEADERS,
+        params={"tenant_id": "demo-tenant", "knowledge_base_id": "kb_support"},
+    )
+    assert report.status_code == 200
+    data = report.json()["data"]
+    assert data["knowledge_bases"]
+    kb_report = data["knowledge_bases"][0]
+    assert kb_report["knowledge_base_id"] == "kb_support"
+    assert kb_report["query_count"] >= 2
+    assert kb_report["effective_hit_count"] >= 1
+    assert kb_report["miss_count"] >= 1
+    assert kb_report["average_satisfaction"] == 4.0
+    assert kb_report["negative_feedback_count"] >= 1
+    assert kb_report["recommendation"]

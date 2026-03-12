@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 def utcnow() -> datetime:
@@ -126,6 +126,7 @@ class Session(BaseModel):
 
 class Citation(BaseModel):
     knowledge_base_id: str
+    version_id: str | None = None
     document_id: str
     title: str
     chunk_id: str
@@ -140,13 +141,49 @@ class KnowledgeBase(BaseModel):
     description: str = ""
     document_count: int = 0
     chunk_count: int = 0
+    active_version_id: str | None = None
+    version_count: int = 0
+    chunk_max_tokens: int = 120
+    chunk_overlap: int = 20
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
+
+
+class KnowledgeVersionStatus(str, Enum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+
+
+class KnowledgeChunkConfig(BaseModel):
+    max_tokens: int = Field(default=120, ge=32, le=2048)
+    overlap: int = Field(default=20, ge=0, le=512)
+
+    @model_validator(mode="after")
+    def validate_overlap(self) -> "KnowledgeChunkConfig":
+        if self.overlap >= self.max_tokens:
+            raise ValueError("overlap must be smaller than max_tokens")
+        return self
+
+
+class KnowledgeVersion(BaseModel):
+    tenant_id: str
+    knowledge_base_id: str
+    version_id: str = Field(default_factory=lambda: new_id("kbver"))
+    status: KnowledgeVersionStatus = KnowledgeVersionStatus.DRAFT
+    description: str = ""
+    chunk_config: KnowledgeChunkConfig = Field(default_factory=KnowledgeChunkConfig)
+    document_count: int = 0
+    chunk_count: int = 0
+    source_version_id: str | None = None
+    created_at: datetime = Field(default_factory=utcnow)
+    activated_at: datetime | None = None
 
 
 class KnowledgeDocument(BaseModel):
     tenant_id: str
     knowledge_base_id: str
+    version_id: str = "legacy"
     document_id: str = Field(default_factory=lambda: new_id("doc"))
     title: str
     content: str
@@ -157,6 +194,7 @@ class KnowledgeDocument(BaseModel):
 class KnowledgeChunk(BaseModel):
     tenant_id: str
     knowledge_base_id: str
+    version_id: str = "legacy"
     document_id: str
     title: str
     chunk_id: str = Field(default_factory=lambda: new_id("chunk"))

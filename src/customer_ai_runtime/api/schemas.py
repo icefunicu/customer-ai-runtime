@@ -57,6 +57,30 @@ class KnowledgeDocumentCreateRequest(TenantScopedRequest):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class KnowledgeVersionSnapshotRequest(TenantScopedRequest):
+    description: str = Field(default="", max_length=512)
+    source_version_id: str | None = Field(default=None, min_length=1, max_length=64)
+
+
+class KnowledgeVersionActivateRequest(TenantScopedRequest):
+    pass
+
+
+class KnowledgeChunkOptimizationApplyRequest(TenantScopedRequest):
+    max_tokens: int = Field(ge=32, le=2048)
+    overlap: int = Field(ge=0, le=512)
+    description: str = Field(default="", max_length=512)
+    activate: bool = True
+
+    @field_validator("overlap")
+    @classmethod
+    def validate_overlap(cls, value: int, info) -> int:
+        max_tokens = info.data.get("max_tokens")
+        if max_tokens is not None and value >= max_tokens:
+            raise ValueError("overlap must be smaller than max_tokens")
+        return value
+
+
 class KnowledgeSearchRequest(TenantScopedRequest):
     query: str = Field(min_length=1, max_length=4000)
     top_k: int | None = Field(default=None, ge=1, le=10)

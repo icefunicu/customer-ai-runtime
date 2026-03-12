@@ -10,6 +10,7 @@ from customer_ai_runtime.domain.models import (
     KnowledgeBase,
     KnowledgeChunk,
     KnowledgeDocument,
+    KnowledgeVersion,
     RTCRoom,
     Session,
 )
@@ -57,6 +58,7 @@ class InMemorySessionRepository:
 class InMemoryKnowledgeRepository:
     def __init__(self, storage_root: str | Path | None = None) -> None:
         self._knowledge_bases: dict[tuple[str, str], KnowledgeBase] = {}
+        self._versions: dict[tuple[str, str], list[KnowledgeVersion]] = {}
         self._documents: dict[tuple[str, str], list[KnowledgeDocument]] = {}
         self._chunks: dict[tuple[str, str], list[KnowledgeChunk]] = {}
         self._storage_path = _state_file(storage_root, "knowledge.json")
@@ -80,24 +82,85 @@ class InMemoryKnowledgeRepository:
             if knowledge_tenant_id == tenant_id
         ]
 
+    def save_version(self, version: KnowledgeVersion) -> KnowledgeVersion:
+        key = (version.tenant_id, version.knowledge_base_id)
+        versions = self._versions.setdefault(key, [])
+        for index, existing in enumerate(versions):
+            if existing.version_id == version.version_id:
+                versions[index] = deepcopy(version)
+                self._flush()
+                return deepcopy(version)
+        versions.append(deepcopy(version))
+        self._flush()
+        return deepcopy(version)
+
+    def get_version(
+        self, tenant_id: str, knowledge_base_id: str, version_id: str
+    ) -> KnowledgeVersion | None:
+        versions = self._versions.get((tenant_id, knowledge_base_id), [])
+        for version in versions:
+            if version.version_id == version_id:
+                return deepcopy(version)
+        return None
+
+    def list_versions(self, tenant_id: str, knowledge_base_id: str) -> list[KnowledgeVersion]:
+        return deepcopy(self._versions.get((tenant_id, knowledge_base_id), []))
+
     def save_document(self, document: KnowledgeDocument) -> KnowledgeDocument:
         key = (document.tenant_id, document.knowledge_base_id)
         self._documents.setdefault(key, []).append(deepcopy(document))
         self._flush()
         return deepcopy(document)
 
-    def list_documents(self, tenant_id: str, knowledge_base_id: str) -> list[KnowledgeDocument]:
-        return deepcopy(self._documents.get((tenant_id, knowledge_base_id), []))
+    def replace_documents(
+        self,
+        tenant_id: str,
+        knowledge_base_id: str,
+        documents: list[KnowledgeDocument],
+        version_id: str | None = None,
+    ) -> list[KnowledgeDocument]:
+        key = (tenant_id, knowledge_base_id)
+        existing = self._documents.get(key, [])
+        if version_id is None:
+            self._documents[key] = deepcopy(documents)
+        else:
+            retained = [document for document in existing if document.version_id != version_id]
+            self._documents[key] = retained + deepcopy(documents)
+        self._flush()
+        return deepcopy(documents)
+
+    def list_documents(
+        self, tenant_id: str, knowledge_base_id: str, version_id: str | None = None
+    ) -> list[KnowledgeDocument]:
+        documents = self._documents.get((tenant_id, knowledge_base_id), [])
+        if version_id is None:
+            return deepcopy(documents)
+        return deepcopy([document for document in documents if document.version_id == version_id])
 
     def replace_chunks(
-        self, tenant_id: str, knowledge_base_id: str, chunks: list[KnowledgeChunk]
+        self,
+        tenant_id: str,
+        knowledge_base_id: str,
+        chunks: list[KnowledgeChunk],
+        version_id: str | None = None,
     ) -> list[KnowledgeChunk]:
-        self._chunks[(tenant_id, knowledge_base_id)] = deepcopy(chunks)
+        key = (tenant_id, knowledge_base_id)
+        existing = self._chunks.get(key, [])
+        if version_id is None:
+            self._chunks[key] = deepcopy(chunks)
+        else:
+            retained = [chunk for chunk in existing if chunk.version_id != version_id]
+            self._chunks[key] = retained + deepcopy(chunks)
         self._flush()
         return deepcopy(chunks)
 
-    def list_chunks(self, tenant_id: str, knowledge_base_id: str) -> list[KnowledgeChunk]:
-        return deepcopy(self._chunks.get((tenant_id, knowledge_base_id), []))
+    def list_chunks(
+        self, tenant_id: str, knowledge_base_id: str, version_id: str | None = None
+    ) -> list[KnowledgeChunk]:
+        chunks = self._chunks.get((tenant_id, knowledge_base_id), [])
+        if version_id is None:
+            return deepcopy(chunks)
+        return deepcopy([chunk for chunk in chunks if chunk.version_id == version_id])
 
     def _load(self) -> None:
         if not self._storage_path:
@@ -106,6 +169,9 @@ class InMemoryKnowledgeRepository:
         for item in payload.get("knowledge_bases", []):
             knowledge_base = KnowledgeBase.model_validate(item)
             self._knowledge_bases[(knowledge_base.tenant_id, knowledge_base.knowledge_base_id)] = knowledge_base
+        for item in payload.get("versions", []):
+            version = KnowledgeVersion.model_validate(item)
+            self._versions.setdefault((version.tenant_id, version.knowledge_base_id), []).append(version)
         for item in payload.get("documents", []):
             document = KnowledgeDocument.model_validate(item)
             self._documents.setdefault((document.tenant_id, document.knowledge_base_id), []).append(document)
@@ -121,6 +187,11 @@ class InMemoryKnowledgeRepository:
             {
                 "knowledge_bases": [
                     item.model_dump(mode="json") for item in self._knowledge_bases.values()
+                ],
+                "versions": [
+                    version.model_dump(mode="json")
+                    for versions in self._versions.values()
+                    for version in versions
                 ],
                 "documents": [
                     document.model_dump(mode="json")

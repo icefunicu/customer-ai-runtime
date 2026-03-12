@@ -35,6 +35,8 @@
 - `MessageFeedbackType`
 - `RouteDecision`
 - `KnowledgeBase`
+- `KnowledgeVersion`
+- `KnowledgeChunkConfig`
 - `KnowledgeDocument`
 - `KnowledgeChunk`
 - `BusinessResult`
@@ -136,8 +138,12 @@
 - 向量库适配层
 - 知识域管理器
 - 不同行业可使用不同知识域组合
-- `KnowledgeService` 额外提供知识库健康报告，用于输出文档数、切片数、重复切片率、空文档数与健康分
+- `KnowledgeBase` 维护 `active_version_id`、`version_count`、默认切片参数 `chunk_max_tokens` / `chunk_overlap`
+- `KnowledgeVersion` 维护版本状态、来源版本与版本级切片配置，文档、切片、引用都按 `version_id` 隔离
+- `KnowledgeService` 额外提供知识库健康报告，用于输出文档数、切片数、重复切片率、空文档数、激活版本与切片配置
+- `KnowledgeService` 支持知识版本快照、版本激活与基于统计结果的切片优化报告 / 应用
 - 当检索后没有有效引用时，写入 `knowledge.retrieve_miss` 诊断事件，供管理端聚合知识缺口
+- 当检索命中有效引用时，写入知识命中诊断与版本标记，用于后续知识库效果分析
 
 ## 6. 业务工具模块
 
@@ -282,7 +288,7 @@
 ### Knowledge Domain Manager
 
 - 维护 `tenant_id + industry + scenario -> knowledge domains`
-- 管理端可基于知识域对应的知识库查看健康报告与检索失败聚合
+- 管理端可基于知识域对应的知识库查看健康报告、版本列表、切片优化建议、检索失败聚合与效果分析
 
 ### Real-time Business Data Provider
 

@@ -183,6 +183,8 @@
 
 ### `GET /api/v1/knowledge-bases/{knowledge_base_id}?tenant_id=demo-tenant`
 
+- 返回重点：`active_version_id`、`version_count`、`chunk_max_tokens`、`chunk_overlap`
+
 ### `POST /api/v1/knowledge-bases/{knowledge_base_id}/documents`
 
 ### `POST /api/v1/knowledge-bases/{knowledge_base_id}/search`
@@ -367,6 +369,66 @@
   - `duplicate_chunk_ratio`
   - `empty_document_count`
   - `health_score`
+  - `active_version_id`
+  - `chunk_config`
+
+### `GET /api/v1/admin/knowledge-bases/{knowledge_base_id}/versions`
+
+- 用途：查看知识库版本列表
+- 可选查询参数：
+  - `tenant_id`
+- 返回重点：
+  - `version_id`
+  - `status`
+  - `source_version_id`
+  - `document_count`
+  - `chunk_count`
+  - `chunk_config`
+  - `created_at`
+
+### `POST /api/v1/admin/knowledge-bases/{knowledge_base_id}/versions/snapshot`
+
+- 用途：基于当前激活版本创建知识快照版本
+- 请求字段：
+  - `tenant_id`
+  - `version_name`
+  - `description`（可选）
+- 返回重点：新版本元数据与当前激活版本关系
+
+### `POST /api/v1/admin/knowledge-bases/{knowledge_base_id}/versions/{version_id}/activate`
+
+- 用途：切换知识库激活版本
+- 请求字段：
+  - `tenant_id`
+- 返回重点：
+  - `knowledge_base`
+  - `active_version`
+
+### `GET /api/v1/admin/knowledge-bases/{knowledge_base_id}/chunk-optimization`
+
+- 用途：查看当前知识库切片优化建议
+- 可选查询参数：
+  - `tenant_id`
+- 返回重点：
+  - `current_chunk_config`
+  - `recommended_chunk_config`
+  - `average_chunk_length`
+  - `duplicate_chunk_ratio`
+  - `oversized_chunk_ratio`
+  - `undersized_chunk_ratio`
+
+### `POST /api/v1/admin/knowledge-bases/{knowledge_base_id}/chunk-optimization/apply`
+
+- 用途：按指定切片参数生成优化后的新版本，并切换为激活版本
+- 请求字段：
+  - `tenant_id`
+  - `chunk_max_tokens`
+  - `chunk_overlap`
+  - `version_name`（可选）
+- 返回重点：
+  - `knowledge_base`
+  - `version`
+  - `optimization_report`
 
 ### `GET /api/v1/admin/knowledge/retrieval-misses`
 
@@ -378,6 +440,22 @@
 - 返回重点：
   - `miss_count`
   - `top_queries`
+
+### `GET /api/v1/admin/knowledge/effectiveness`
+
+- 用途：按知识库汇总知识检索效果
+- 可选查询参数：
+  - `tenant_id`
+  - `knowledge_base_id`
+- 返回重点：
+  - `query_count`
+  - `effective_hit_count`
+  - `miss_count`
+  - `hit_rate`
+  - `average_satisfaction`
+  - `negative_feedback_rate`
+  - `active_versions`
+  - `recommendation`
 
 ### `GET /api/v1/admin/providers/health`
 
