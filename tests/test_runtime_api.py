@@ -123,6 +123,28 @@ def test_chat_business_flow(client: TestClient) -> None:
     assert data["tool_result"]["status"] == "success"
 
 
+def test_chat_route_uses_page_context_for_contextual_question(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "这个现在到哪了",
+            "integration_context": {
+                "industry": "ecommerce",
+                "page_context": {"page_type": "order_detail"},
+                "business_objects": {"order_id": "ORD-1001"},
+            },
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["route"] == "business"
+    assert data["route_decision"]["tool_name"] == "order_status"
+    assert data["tool_result"]["status"] == "success"
+
+
 def test_handoff_flow(client: TestClient) -> None:
     response = client.post(
         "/api/v1/chat/messages",
@@ -465,6 +487,67 @@ def test_context_resolve_with_industry_and_page_context(client: TestClient) -> N
     assert data["industry"] == "ecommerce"
     assert data["page_context"]["page_type"] == "order_detail"
     assert data["business_objects"]["order_id"] == "ORD-1001"
+
+
+def test_chat_can_return_to_previous_intent_with_session_intent_stack(client: TestClient) -> None:
+    seed_knowledge_base(client)
+    first = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "我的订单什么时候发货",
+            "integration_context": {
+                "industry": "ecommerce",
+                "page_context": {"page_type": "order_detail"},
+                "business_objects": {"order_id": "ORD-1001"},
+            },
+        },
+    )
+    assert first.status_code == 200
+    session_id = first.json()["data"]["session_id"]
+    assert first.json()["data"]["route"] == "business"
+
+    second = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "session_id": session_id,
+            "channel": "web",
+            "message": "帮助中心关于七天无理由退款的一般政策是什么？",
+            "knowledge_base_id": "kb_support",
+        },
+    )
+    assert second.status_code == 200
+    assert second.json()["data"]["route"] == "knowledge"
+
+    third = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "session_id": session_id,
+            "channel": "web",
+            "message": "还是回到刚才的问题",
+        },
+    )
+    assert third.status_code == 200
+    third_data = third.json()["data"]
+    assert third_data["route"] == "business"
+    assert third_data["route_decision"]["tool_name"] == "order_status"
+    assert third_data["tool_result"]["status"] == "success"
+
+    session = client.get(
+        f"/api/v1/sessions/{session_id}",
+        headers=CUSTOMER_HEADERS,
+        params={"tenant_id": "demo-tenant"},
+    )
+    assert session.status_code == 200
+    intent_stack = session.json()["data"]["intent_stack"]
+    assert len(intent_stack) >= 2
+    assert intent_stack[-1]["intent"] == "order_status"
 
 
 def test_session_auth_bridge_chat_flow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

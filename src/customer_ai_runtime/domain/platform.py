@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from customer_ai_runtime.domain.models import IntentFrame
+
 
 class IndustryType(str, Enum):
     ECOMMERCE = "ecommerce"
@@ -74,6 +76,7 @@ class BusinessContext(BaseModel):
     user_profile: dict[str, Any] = Field(default_factory=dict)
     behavior_signals: dict[str, Any] = Field(default_factory=dict)
     session_summary: str = ""
+    intent_stack: list[IntentFrame] = Field(default_factory=list)
     permissions: list[str] = Field(default_factory=list)
     extra: dict[str, Any] = Field(default_factory=dict)
 
@@ -118,12 +121,13 @@ class RoutePluginResult(BaseModel):
     route: str | None = None
     confidence: float = 0.0
     reason: str = ""
+    intent: str | None = None
     tool_name: str | None = None
     requires_handoff: bool = False
+    matched_signals: list[str] = Field(default_factory=list)
 
 
 class HandoffDecision(BaseModel):
     should_handoff: bool = False
     reason: str = ""
     priority: int = 0
-

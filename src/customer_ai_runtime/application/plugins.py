@@ -224,7 +224,9 @@ class RiskRoutePlugin(RouteStrategyPlugin):
                 route=RouteType.RISK.value,
                 confidence=0.98,
                 reason=zh("\\u547d\\u4e2d\\u9ad8\\u98ce\\u9669\\u5173\\u952e\\u8bcd"),
+                intent=RouteType.RISK.value,
                 requires_handoff=True,
+                matched_signals=["keyword:risk"],
             )
         return RoutePluginResult()
 
@@ -251,7 +253,9 @@ class HumanRequestRoutePlugin(RouteStrategyPlugin):
                 route=RouteType.HANDOFF.value,
                 confidence=0.99,
                 reason=zh("\\u7528\\u6237\\u4e3b\\u52a8\\u8981\\u6c42\\u4eba\\u5de5"),
+                intent="human_request",
                 requires_handoff=True,
+                matched_signals=["keyword:human_request"],
             )
         return RoutePluginResult()
 
@@ -295,7 +299,9 @@ class BusinessIntentRoutePlugin(RouteStrategyPlugin):
                     route=RouteType.BUSINESS.value,
                     confidence=0.88,
                     reason=zh("\\u547d\\u4e2d\\u4e1a\\u52a1\\u5173\\u952e\\u8bcd"),
+                    intent=tool_name,
                     tool_name=tool_name,
+                    matched_signals=["keyword:business"],
                 )
         return RoutePluginResult()
 
@@ -326,6 +332,8 @@ class KnowledgeQuestionRoutePlugin(RouteStrategyPlugin):
                 route=RouteType.KNOWLEDGE.value,
                 confidence=0.72,
                 reason=zh("\\u547d\\u4e2d\\u77e5\\u8bc6\\u95ee\\u7b54\\u7279\\u5f81"),
+                intent="knowledge_question",
+                matched_signals=["pattern:knowledge_question"],
             )
         return RoutePluginResult()
 
@@ -348,6 +356,8 @@ class FallbackRoutePlugin(RouteStrategyPlugin):
             route=RouteType.FALLBACK.value,
             confidence=0.36,
             reason=zh("\\u672a\\u8bc6\\u522b\\u5230\\u660e\\u786e\\u610f\\u56fe"),
+            intent="fallback_clarification",
+            matched_signals=["fallback:no_match"],
         )
 
 
@@ -1156,8 +1166,11 @@ def route_result_to_decision(result: RoutePluginResult) -> RouteDecision:
         route=RouteType(route),
         confidence=result.confidence,
         reason=result.reason,
+        intent=result.intent or result.tool_name or route,
+        confidence_band="high" if result.confidence >= 0.85 else "medium" if result.confidence >= 0.55 else "low",
         tool_name=result.tool_name,
         requires_handoff=result.requires_handoff,
+        matched_signals=list(result.matched_signals),
     )
 
 

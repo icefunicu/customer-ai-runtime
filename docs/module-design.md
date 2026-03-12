@@ -30,6 +30,7 @@
 ### 2.2 关键模型
 
 - `Session`
+- `IntentFrame`
 - `Message`
 - `RouteDecision`
 - `KnowledgeBase`
@@ -56,6 +57,9 @@
 - 当前会话
 - 消息历史
 - 当前状态
+- `last_route`
+- `last_intent`
+- `intent_stack`
 
 ### 状态机
 
@@ -78,6 +82,9 @@
 - 行业类型
 - 宿主上下文
 - 历史摘要
+- `page_context`
+- `business_objects`
+- `intent_stack`
 
 ### 输出
 
@@ -87,12 +94,20 @@
 - `risk`
 - `plugin`
 - `fallback`
+- `confidence`
+- `confidence_band`
+- `intent`
+- `matched_signals`
 
 ### 扩展方式
 
 - `RouteStrategyPlugin`
 - 行业适配器可提供路由提示
 - 风险插件可覆盖默认路由结果
+- `Route Orchestrator` 会聚合插件候选结果，而不是只依赖单次命中
+- 结合 `page_context`、`business_objects` 和 `intent_stack` 对候选路由做动态加权
+- 当置信度低于 `route_fallback_confidence_threshold` 时进入澄清兜底
+- 当低于 `route_handoff_confidence_threshold` 或连续低置信度时升级为转人工
 
 ## 5. RAG 模块
 
@@ -254,7 +269,7 @@
 
 ### Business Context Builder
 
-- 合并宿主身份、页面上下文、业务对象、用户画像、最近行为、会话摘要
+- 合并宿主身份、页面上下文、业务对象、用户画像、最近行为、会话摘要、`intent_stack`
 
 ### Knowledge Domain Manager
 

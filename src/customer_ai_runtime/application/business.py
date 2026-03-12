@@ -106,6 +106,7 @@ class BusinessContextBuilder:
             host_auth_context=host_auth_context,
             integration_context=integration_context or {},
             session_summary="" if session is None else session.summary,
+            intent_stack=[] if session is None else session.intent_stack,
             permissions=[] if not host_auth_context else list(host_auth_context.permissions),
         )
         detected = await self._industry_service.detect(context, user_message=user_message)

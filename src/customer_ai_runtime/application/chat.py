@@ -67,6 +67,7 @@ class ChatService:
             user_message=message,
         )
         route_decision = await self.routing_service.decide(message, business_context)
+        business_context = self.routing_service.apply_context_snapshot(business_context, route_decision)
         self.diagnostics.record(
             DiagnosticLevel.INFO,
             "chat.route_decided",
@@ -75,12 +76,19 @@ class ChatService:
                 "tenant_id": tenant_id,
                 "session_id": session.session_id,
                 "route": route_decision.route.value,
+                "intent": route_decision.intent,
+                "route_confidence": route_decision.confidence,
+                "confidence_band": route_decision.confidence_band,
                 "channel": channel,
                 "industry": business_context.industry,
             },
         )
-        session.last_route = route_decision.route
-        session.last_intent = route_decision.reason
+        self.session_service.record_route_decision(
+            session,
+            route_decision,
+            message,
+            max_depth=self.runtime_config.get_policies().intent_stack_max_depth,
+        )
         prompts = self.runtime_config.get_prompts()
         policies = self.runtime_config.get_policies()
         citations = []
@@ -158,6 +166,9 @@ class ChatService:
             "state": session.state.value,
             "route": route_decision.route.value,
             "confidence": round(llm_response.confidence, 4),
+            "route_confidence": round(route_decision.confidence, 4),
+            "route_confidence_band": route_decision.confidence_band,
+            "intent": route_decision.intent,
             "answer": llm_response.answer,
             "citations": [citation.model_dump(mode="json") for citation in llm_response.citations],
             "tool_result": None if tool_result is None else tool_result.model_dump(mode="json"),
@@ -168,6 +179,15 @@ class ChatService:
             else host_auth_context.model_dump(mode="json"),
             "requires_handoff": route_decision.requires_handoff,
             "reason": route_decision.reason,
+            "route_decision": {
+                "route": route_decision.route.value,
+                "confidence": round(route_decision.confidence, 4),
+                "confidence_band": route_decision.confidence_band,
+                "intent": route_decision.intent,
+                "tool_name": route_decision.tool_name,
+                "reason": route_decision.reason,
+                "matched_signals": list(route_decision.matched_signals),
+            },
         }
 
         should_handoff, handoff_reason = await self.handoff_service.should_handoff(
@@ -209,7 +229,12 @@ class ChatService:
             session,
             MessageRole.ASSISTANT,
             response_payload["answer"],
-            metadata={"route": route_decision.route.value, "industry": business_context.industry},
+            metadata={
+                "route": route_decision.route.value,
+                "industry": business_context.industry,
+                "intent": route_decision.intent,
+                "route_confidence_band": route_decision.confidence_band,
+            },
         )
         self.session_service.save(session)
         self.metrics.increment("chat_requests")

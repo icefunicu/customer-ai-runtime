@@ -22,6 +22,7 @@
 - **RAG 知识增强** - 多租户知识库管理，支持向量检索与引用溯源
 - **实时业务数据** - 通过业务工具插件查询订单、物流、工单等动态数据
 - **AI/人工协同** - 智能路由决策，支持高风险识别与人工接管
+- **智能路由增强** - 支持路由置信度分层、`intent_stack` 多轮追踪、`page_context` / `business_objects` 场景感知
 - **运营管理** - Prompt/Policy 管理、会话监控、诊断接口、插件管理
 
 ## 架构概览
@@ -157,6 +158,24 @@ response = httpx.post("http://127.0.0.1:8000/api/v1/chat/messages", json={
 
 print(response.json())
 ```
+
+文本客服响应会额外返回：
+
+- `route_confidence`：本轮路由决策置信度
+- `route_confidence_band`：`high` / `medium` / `low`
+- `intent`：当前识别到的主意图
+- `route_decision`：包含 `tool_name`、`reason`、`matched_signals`
+
+### 路由增强策略
+
+运行时热配置中的 `policies` 支持以下路由增强字段：
+
+- `route_fallback_confidence_threshold`
+- `route_handoff_confidence_threshold`
+- `intent_stack_max_depth`
+- `intent_return_keywords`
+
+系统会先聚合插件候选结果，再结合当前页面、业务对象和会话 `intent_stack` 做动态加权。低于兜底阈值时优先进入澄清回复；若连续低置信度或存在挫败信号，则升级为转人工。
 
 ### 宿主系统挂载
 

@@ -73,6 +73,20 @@ class Message(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class IntentFrame(BaseModel):
+    intent: str
+    route: RouteType
+    tool_name: str | None = None
+    confidence: float = 0.0
+    confidence_band: str = "low"
+    low_confidence_count: int = 0
+    matched_signals: list[str] = Field(default_factory=list)
+    context_snapshot: dict[str, Any] = Field(default_factory=dict)
+    last_user_message: str = ""
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
 class Session(BaseModel):
     tenant_id: str
     session_id: str = Field(default_factory=lambda: new_id("session"))
@@ -82,6 +96,7 @@ class Session(BaseModel):
     summary: str = ""
     last_intent: str | None = None
     last_route: RouteType | None = None
+    intent_stack: list[IntentFrame] = Field(default_factory=list)
     waiting_human: bool = False
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
@@ -138,8 +153,12 @@ class RouteDecision(BaseModel):
     route: RouteType
     confidence: float
     reason: str
+    intent: str | None = None
+    confidence_band: str = "low"
     tool_name: str | None = None
     requires_handoff: bool = False
+    matched_signals: list[str] = Field(default_factory=list)
+    context_snapshot: dict[str, Any] = Field(default_factory=dict)
 
 
 class BusinessQuery(BaseModel):
@@ -226,11 +245,23 @@ class PolicyConfig(BaseModel):
     knowledge_top_k: int = 3
     knowledge_min_score: float = 0.18
     handoff_confidence_threshold: float = 0.45
+    route_fallback_confidence_threshold: float = 0.55
+    route_handoff_confidence_threshold: float = 0.3
+    intent_stack_max_depth: int = 6
     risk_keywords: list[str] = Field(
         default_factory=lambda: ["投诉", "仲裁", "监管", "律师", "报警", "安全事故"]
     )
     human_request_keywords: list[str] = Field(
         default_factory=lambda: ["人工", "真人", "客服", "转接人工", "投诉专员"]
+    )
+    intent_return_keywords: list[str] = Field(
+        default_factory=lambda: [
+            "回到刚才的问题",
+            "还是回到刚才的问题",
+            "继续刚才的问题",
+            "还是那个问题",
+            "继续刚才那个",
+        ]
     )
     business_keyword_map: dict[str, list[str]] = Field(
         default_factory=lambda: {

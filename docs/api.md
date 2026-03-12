@@ -87,6 +87,7 @@
 ### `GET /api/v1/sessions/{session_id}`
 
 - 用途：查询会话
+- 返回重点：`last_route`、`last_intent`、`intent_stack`
 
 ### `GET /api/v1/sessions/{session_id}/messages?tenant_id=demo-tenant`
 
@@ -137,11 +138,25 @@
 - `route`
 - `industry`
 - `confidence`
+- `route_confidence`
+- `route_confidence_band`
+- `intent`
 - `answer`
 - `citations`
 - `tool_result`
 - `handoff`
 - `host_auth_context`
+- `route_decision`
+
+其中 `route_decision` 包含：
+
+- `route`
+- `confidence`
+- `confidence_band`
+- `intent`
+- `tool_name`
+- `reason`
+- `matched_signals`
 
 ### `POST /api/v1/chat/handoff`
 
@@ -301,6 +316,13 @@
 ### `GET /api/v1/admin/policies`
 
 ### `PUT /api/v1/admin/policies`
+
+路由增强相关策略字段：
+
+- `route_fallback_confidence_threshold`
+- `route_handoff_confidence_threshold`
+- `intent_stack_max_depth`
+- `intent_return_keywords`
 
 ### `GET /api/v1/admin/diagnostics`
 

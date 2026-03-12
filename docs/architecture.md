@@ -78,13 +78,13 @@
 ### 4.3 核心客服引擎层
 
 - `Session` 管理会话生命周期。
-- `Route Orchestrator` 决定知识、业务、人工、高风险、插件路线。
+- `Route Orchestrator` 决定知识、业务、人工、高风险、插件路线，并执行置信度分层。
 - `LLM Orchestrator` 融合检索结果、实时数据和上下文。
 - `RTC` 服务直接处理实时热路径，不通过事件总线。
 
 ### 4.4 业务增强层
 
-- `Business Context Builder` 合并页面、用户、宿主对象、会话摘要。
+- `Business Context Builder` 合并页面、用户、宿主对象、会话摘要和 `intent_stack`。
 - `Knowledge Domain Manager` 管理不同租户、行业下的知识域。
 - `Real-time Business Data Provider` 通过业务工具插件读取动态数据。
 - `Response Enhancement Orchestrator` 统一做引用、风格、脱敏和结构化输出后处理。
@@ -102,12 +102,15 @@
 2. `AuthService` 通过 API Key 或 Auth Bridge 解析身份。
 3. `Business Context Builder` 合并宿主与页面上下文。
 4. `Industry Adapter` 识别行业。
-5. `Route Strategy Plugins` 决定走知识、业务、人工或高风险。
-6. 若为知识型：`Knowledge Domain Manager` 解析知识域并检索。
-7. 若为业务型：`Business Tool Plugins` 或 `BusinessAdapter` 调实时接口。
-8. `LLM / Response Enhancement` 生成回复。
-9. `Human Handoff Plugins` 判断是否转人工。
-10. `Response Post Processor Plugins` 完成脱敏、格式化、多语言或结构化输出。
+5. `Session` 维护 `intent_stack`，记录主题切换与回退历史。
+6. `Route Strategy Plugins` 产出候选路由。
+7. `Route Orchestrator` 结合 `page_context`、`business_objects`、`intent_stack` 对候选结果做动态加权。
+8. 若路由置信度不足，先走澄清兜底；若连续低置信度或存在挫败信号，则升级转人工。
+9. 若为知识型：`Knowledge Domain Manager` 解析知识域并检索。
+10. 若为业务型：`Business Tool Plugins` 或 `BusinessAdapter` 调实时接口。
+11. `LLM / Response Enhancement` 生成回复。
+12. `Human Handoff Plugins` 判断是否转人工。
+13. `Response Post Processor Plugins` 完成脱敏、格式化、多语言或结构化输出。
 
 ### 5.2 语音请求
 
@@ -156,6 +159,7 @@
 
 - 主对象统一使用 `tenant_id`、`session_id`、`knowledge_base_id`。
 - `session` 承载可恢复上下文，不与 `conversation` 混用。
+- 路由决策必须保留 `confidence`、`confidence_band` 和 `intent_stack` 轨迹，避免低置信度强答。
 - 实时语音热路径不经过事件总线。
 - 静态知识与实时业务数据必须分离处理。
 - 认证与上下文映射必须插件化，不把宿主逻辑写死到主流程。

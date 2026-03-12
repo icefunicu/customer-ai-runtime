@@ -33,10 +33,14 @@ class PluginRegistry:
 ### 3.1 RouteStrategyPlugin
 
 - 请求分类
+- 意图置信度打分
+- 低置信度分层策略
 - 行业识别提示
 - 工具调用决策
 - 转人工决策
 - 风险处理
+- `page_context` / `business_objects` 场景加权
+- `intent_stack` 历史主题回退
 
 ### 3.2 BusinessToolPlugin
 
@@ -107,6 +111,7 @@ class PluginRegistry:
 ## 6. 执行原则
 
 - 同类插件按 `priority` 从高到低执行。
+- 路由类插件先产出候选结果，再由 `Route Orchestrator` 统一做动态加权与阈值分层。
 - 租户与行业不匹配的插件不参与执行。
 - 任意插件失败时必须记录诊断并回退，不允许拖垮主流程。
 

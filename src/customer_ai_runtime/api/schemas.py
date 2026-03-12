@@ -104,8 +104,12 @@ class PolicyUpdateRequest(BaseModel):
     knowledge_top_k: int | None = Field(default=None, ge=1, le=10)
     knowledge_min_score: float | None = Field(default=None, ge=0.0, le=1.0)
     handoff_confidence_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
+    route_fallback_confidence_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
+    route_handoff_confidence_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
+    intent_stack_max_depth: int | None = Field(default=None, ge=1, le=20)
     risk_keywords: list[str] | None = None
     human_request_keywords: list[str] | None = None
+    intent_return_keywords: list[str] | None = None
     business_keyword_map: dict[str, list[str]] | None = None
 
 
