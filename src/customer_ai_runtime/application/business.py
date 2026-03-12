@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from customer_ai_runtime.application.plugins import (
@@ -202,10 +203,14 @@ class RealTimeBusinessDataProvider:
 
 
 class ResponseEnhancementOrchestrator:
+    phone_pattern = re.compile(r"(?<!\d)(1\d{2})\d{4}(\d{4})(?!\d)")
+
     def __init__(self, registry: PluginRegistry) -> None:
         self._registry = registry
 
     async def enhance(self, response: dict[str, Any], context: BusinessContext) -> dict[str, Any]:
+        enhanced = self._normalize_response(response)
+        enhanced = self._apply_builtin_enhancements(enhanced, context)
         plugin_context = context_to_plugin_context(
             tenant_id=context.tenant_id,
             channel=context.channel,
@@ -214,10 +219,9 @@ class ResponseEnhancementOrchestrator:
             integration_context=context.integration_context,
             host_auth_context=context.host_auth_context,
             business_context=context,
-            route=response.get("route"),
-            response=response,
+            route=enhanced.get("route"),
+            response=enhanced,
         )
-        enhanced = dict(response)
         for plugin in self._registry.resolve(
             PluginKind.RESPONSE_POST_PROCESSOR,
             tenant_id=context.tenant_id,
@@ -227,5 +231,142 @@ class ResponseEnhancementOrchestrator:
             if not isinstance(plugin, ResponsePostProcessorPlugin):
                 continue
             enhanced = await plugin.process(plugin_context, enhanced)
+            enhanced = self._normalize_response(enhanced)
             plugin_context.response = enhanced
+        return self._finalize_response(enhanced, context)
+
+    def _normalize_response(self, response: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(response)
+        normalized["answer"] = str(normalized.get("answer") or "")
+        normalized["citations"] = list(normalized.get("citations") or [])
+        if not isinstance(normalized.get("references"), list):
+            normalized["references"] = []
+        return normalized
+
+    def _apply_builtin_enhancements(
+        self,
+        response: dict[str, Any],
+        context: BusinessContext,
+    ) -> dict[str, Any]:
+        enhanced = dict(response)
+        enhanced = self._format_response_fields(enhanced)
+        enhanced["references"] = self._build_references(enhanced.get("citations") or [])
+        enhanced["answer"] = self._append_reference_titles(
+            enhanced.get("answer", ""),
+            enhanced["references"],
+        )
+        enhanced = self._mask_sensitive_payload(enhanced)
+        enhanced = self._ensure_structured_output(enhanced, context)
         return enhanced
+
+    def _finalize_response(
+        self,
+        response: dict[str, Any],
+        context: BusinessContext,
+    ) -> dict[str, Any]:
+        finalized = self._format_response_fields(response)
+        finalized["references"] = self._build_references(finalized.get("citations") or [])
+        finalized["answer"] = self._append_reference_titles(
+            finalized.get("answer", ""),
+            finalized["references"],
+        )
+        finalized = self._mask_sensitive_payload(finalized)
+        finalized = self._ensure_structured_output(finalized, context)
+        return finalized
+
+    def _format_response_fields(self, response: dict[str, Any]) -> dict[str, Any]:
+        formatted = dict(response)
+        formatted["answer"] = self._format_text_block(formatted.get("answer"))
+        tool_result = formatted.get("tool_result")
+        if isinstance(tool_result, dict):
+            formatted_tool_result = dict(tool_result)
+            if not formatted["answer"] and formatted_tool_result.get("summary"):
+                formatted["answer"] = self._format_text_block(
+                    formatted_tool_result.get("summary")
+                )
+            formatted_tool_result["summary"] = self._format_text_block(
+                formatted_tool_result.get("summary")
+            )
+            formatted["tool_result"] = formatted_tool_result
+        handoff = formatted.get("handoff")
+        if isinstance(handoff, dict):
+            formatted_handoff = dict(handoff)
+            for key in ("summary", "recommended_reply", "reason", "intent"):
+                formatted_handoff[key] = self._format_text_block(formatted_handoff.get(key))
+            formatted["handoff"] = formatted_handoff
+        return formatted
+
+    def _append_reference_titles(
+        self,
+        answer: str,
+        references: list[dict[str, Any]],
+    ) -> str:
+        text = self._format_text_block(answer)
+        if not text or not references:
+            return text
+        if "参考：" in text or "引用：" in text:
+            return text
+        titles = "、".join(
+            reference["title"]
+            for reference in references[:2]
+            if isinstance(reference, dict) and reference.get("title")
+        )
+        if not titles:
+            return text
+        return f"{text} 参考：{titles}。"
+
+    def _build_references(self, citations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        references: list[dict[str, Any]] = []
+        for item in citations:
+            if not isinstance(item, dict):
+                continue
+            references.append(
+                {
+                    "title": item.get("title", ""),
+                    "knowledge_base_id": item.get("knowledge_base_id"),
+                    "document_id": item.get("document_id"),
+                    "score": item.get("score"),
+                }
+            )
+        return references
+
+    def _ensure_structured_output(
+        self,
+        response: dict[str, Any],
+        context: BusinessContext,
+    ) -> dict[str, Any]:
+        if context.integration_context.get("response_format") != "structured":
+            return response
+        structured_output = dict(response.get("structured_output") or {})
+        structured_output.update(
+            {
+                "route": response.get("route"),
+                "answer": response.get("answer"),
+                "industry": response.get("industry"),
+                "citations": response.get("citations") or [],
+                "references": response.get("references") or [],
+                "tool_result": response.get("tool_result"),
+                "handoff": response.get("handoff"),
+            }
+        )
+        result = dict(response)
+        result["structured_output"] = structured_output
+        return result
+
+    def _mask_sensitive_payload(self, value: Any) -> Any:
+        if isinstance(value, str):
+            return self.phone_pattern.sub(r"\1****\2", value)
+        if isinstance(value, list):
+            return [self._mask_sensitive_payload(item) for item in value]
+        if isinstance(value, dict):
+            return {key: self._mask_sensitive_payload(item) for key, item in value.items()}
+        return value
+
+    def _format_text_block(self, value: Any) -> str:
+        if value is None:
+            return ""
+        text = str(value).replace("\r\n", "\n").strip()
+        if not text:
+            return ""
+        lines = [re.sub(r"\s+", " ", line).strip() for line in text.split("\n")]
+        return "\n".join(line for line in lines if line)
