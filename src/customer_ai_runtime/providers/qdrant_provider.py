@@ -15,7 +15,7 @@ class QdrantVectorStoreProvider(VectorStoreProvider):
             raise AppError(
                 code="provider_error",
                 message="未配置 CUSTOMER_AI_QDRANT_URL，无法启用 Qdrant 提供商。",
-                status_code=500,
+                status_code=503,
             )
         self._settings = settings
         self._client = AsyncQdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
@@ -70,4 +70,3 @@ class QdrantVectorStoreProvider(VectorStoreProvider):
 
     def _collection_name(self, tenant_id: str, knowledge_base_id: str) -> str:
         return f"{self._settings.qdrant_collection_prefix}_{tenant_id}_{knowledge_base_id}"
-

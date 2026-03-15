@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from customer_ai_runtime.application.access import AccessControlService
@@ -28,6 +29,7 @@ from customer_ai_runtime.application.tool_catalog import ToolCatalogService
 from customer_ai_runtime.application.tooling import ToolService
 from customer_ai_runtime.application.voice_rtc import RTCService, VoiceService
 from customer_ai_runtime.core.config import Settings
+from customer_ai_runtime.core.diagnostics_export import DiagnosticsJsonlExporter
 from customer_ai_runtime.providers.aliyun_provider import AliyunASRProvider, AliyunTTSProvider
 from customer_ai_runtime.providers.base import (
     ASRProvider,
@@ -55,6 +57,12 @@ from customer_ai_runtime.providers.openai_provider import (
 from customer_ai_runtime.providers.pinecone_provider import PineconeVectorStoreProvider
 from customer_ai_runtime.providers.qdrant_provider import QdrantVectorStoreProvider
 from customer_ai_runtime.providers.tencent_provider import TencentASRProvider, TencentTTSProvider
+from customer_ai_runtime.repositories.base import (
+    DiagnosticsRepository,
+    KnowledgeRepository,
+    RTCRepository,
+    SessionRepository,
+)
 from customer_ai_runtime.repositories.memory import (
     InMemoryDiagnosticsRepository,
     InMemoryKnowledgeRepository,
@@ -89,10 +97,10 @@ class ContainerOverrides:
     tts_provider: TTSProvider | None = None
     vector_store: VectorStoreProvider | None = None
     business_adapter: BusinessAdapter | None = None
-    session_repository: InMemorySessionRepository | None = None
-    knowledge_repository: InMemoryKnowledgeRepository | None = None
-    rtc_repository: InMemoryRTCRepository | None = None
-    diagnostics_repository: InMemoryDiagnosticsRepository | None = None
+    session_repository: SessionRepository | None = None
+    knowledge_repository: KnowledgeRepository | None = None
+    rtc_repository: RTCRepository | None = None
+    diagnostics_repository: DiagnosticsRepository | None = None
     extra: dict[str, Any] | None = None
 
 
@@ -111,7 +119,13 @@ def build_container(settings: Settings, overrides: ContainerOverrides | None = N
 
     runtime_config = RuntimeConfigService(settings.storage_root)
     metrics = MetricsService()
-    diagnostics = DiagnosticsService(diagnostics_repository)
+    exporter = None
+    if settings.diagnostics_export_path:
+        export_path = Path(settings.diagnostics_export_path)
+        if not export_path.is_absolute():
+            export_path = Path(settings.storage_root) / export_path
+        exporter = DiagnosticsJsonlExporter(export_path)
+    diagnostics = DiagnosticsService(diagnostics_repository, exporter=exporter)
     plugin_registry = PluginRegistry(
         persisted_states=runtime_config.get_plugin_states(),
         on_state_change=runtime_config.set_plugin_state,

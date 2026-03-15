@@ -58,7 +58,8 @@ class LocalLLMProvider(LLMProvider):
             return LLMResponse(
                 answer=(
                     f"根据知识库《{citation_titles}》的内容，{request.citations[0].excerpt}"
-                    f" 如果您需要我进一步结合订单或售后状态处理，我可以继续查询业务系统。{context_hint}"
+                    " 如果您需要我进一步结合订单或售后状态处理，我可以继续查询业务系统。"
+                    f"{context_hint}"
                 ),
                 confidence=0.79,
                 citations=request.citations,
@@ -83,7 +84,9 @@ class LocalASRProvider(ASRProvider):
         except UnicodeDecodeError as exc:
             raise AppError(
                 code="provider_error",
-                message="默认本地 ASR 提供商仅支持开发环境文本载荷，请切换真实 ASR 提供商处理音频。",
+                message=(
+                    "默认本地 ASR 提供商仅支持开发环境文本载荷，请切换真实 ASR 提供商处理音频。"
+                ),
                 status_code=422,
                 details={"content_type": request.content_type},
             ) from exc
@@ -173,10 +176,18 @@ class LocalBusinessAdapter(BusinessAdapter):
             "SUB-4001": {"plan": "enterprise", "status": "active", "renew_at": "2026-09-01"},
         }
         self._tickets = {
-            "TK-5001": {"status": "处理中", "owner": "企业客服组", "updated_at": "2026-03-12 10:20"},
+            "TK-5001": {
+                "status": "处理中",
+                "owner": "企业客服组",
+                "updated_at": "2026-03-12 10:20",
+            },
         }
         self._courses = {
-            "COURSE-6001": {"title": "Python 实战课", "valid_until": "2026-12-31", "status": "available"},
+            "COURSE-6001": {
+                "title": "Python 实战课",
+                "valid_until": "2026-12-31",
+                "status": "available",
+            },
         }
         self._progress = {
             "STU-7001": {"progress": "68%", "last_lesson": "第 12 章", "exam_status": "未完成"},
@@ -413,7 +424,9 @@ class LocalBusinessAdapter(BusinessAdapter):
             return BusinessResult(
                 tool_name=tool_name,
                 status="success",
-                summary=f"运单 {waybill_id} 当前状态 {result['status']}，最新节点：{result['latest']}。",
+                summary=(
+                    f"运单 {waybill_id} 当前状态 {result['status']}，最新节点：{result['latest']}。"
+                ),
                 data=result,
                 integration_context=query.integration_context,
             )
@@ -435,7 +448,10 @@ class LocalBusinessAdapter(BusinessAdapter):
             return BusinessResult(
                 tool_name=tool_name,
                 status="success",
-                summary=f"理赔单 {claim_id} 当前状态 {result['status']}，最近更新时间 {result['updated_at']}。",
+                summary=(
+                    f"理赔单 {claim_id} 当前状态 {result['status']}，"
+                    f"最近更新时间 {result['updated_at']}。"
+                ),
                 data=result,
                 integration_context=query.integration_context,
             )
@@ -464,7 +480,9 @@ class LocalBusinessAdapter(BusinessAdapter):
                 data=result,
                 integration_context=query.integration_context,
             )
-        raise AppError(code="validation_error", message=f"不支持的工具：{tool_name}", status_code=400)
+        raise AppError(
+            code="validation_error", message=f"不支持的工具：{tool_name}", status_code=400
+        )
 
 
 def citations_from_hits(hits: list[RetrievalHit]) -> list[Citation]:

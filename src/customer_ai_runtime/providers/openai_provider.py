@@ -7,7 +7,14 @@ from openai import AsyncOpenAI
 
 from customer_ai_runtime.core.config import Settings
 from customer_ai_runtime.core.errors import AppError
-from customer_ai_runtime.domain.models import ASRRequest, ASRResult, LLMRequest, LLMResponse, TTSRequest, TTSResult
+from customer_ai_runtime.domain.models import (
+    ASRRequest,
+    ASRResult,
+    LLMRequest,
+    LLMResponse,
+    TTSRequest,
+    TTSResult,
+)
 from customer_ai_runtime.providers.base import ASRProvider, LLMProvider, TTSProvider
 
 
@@ -72,7 +79,6 @@ def _build_client(settings: Settings) -> AsyncOpenAI:
         raise AppError(
             code="provider_error",
             message="未配置 CUSTOMER_AI_OPENAI_API_KEY，无法启用 OpenAI 提供商。",
-            status_code=500,
+            status_code=503,
         )
     return AsyncOpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url)
-

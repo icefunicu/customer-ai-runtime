@@ -1071,9 +1071,7 @@ class DefaultSummaryHandoffPlugin(HumanHandoffPlugin):
         history = session.messages[-10:]
         user_messages = [message.content for message in history if message.role == MessageRole.USER]
         intent = (
-            user_messages[-1]
-            if user_messages
-            else zh("\\u7528\\u6237\\u9700\\u8981\\u4eba\\u5de5")
+            user_messages[-1] if user_messages else zh("\\u7528\\u6237\\u9700\\u8981\\u4eba\\u5de5")
         )
         summary = " | ".join(message.content for message in history[-6:])
         return HandoffPackage(
@@ -1167,7 +1165,11 @@ def route_result_to_decision(result: RoutePluginResult) -> RouteDecision:
         confidence=result.confidence,
         reason=result.reason,
         intent=result.intent or result.tool_name or route,
-        confidence_band="high" if result.confidence >= 0.85 else "medium" if result.confidence >= 0.55 else "low",
+        confidence_band="high"
+        if result.confidence >= 0.85
+        else "medium"
+        if result.confidence >= 0.55
+        else "low",
         tool_name=result.tool_name,
         requires_handoff=result.requires_handoff,
         matched_signals=list(result.matched_signals),

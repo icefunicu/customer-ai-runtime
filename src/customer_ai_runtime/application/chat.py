@@ -7,16 +7,26 @@ from customer_ai_runtime.application.business import (
     KnowledgeDomainManager,
     ResponseEnhancementOrchestrator,
 )
-from customer_ai_runtime.domain.models import BusinessResult, DiagnosticLevel, LLMRequest, MessageRole, RouteType
-from customer_ai_runtime.domain.platform import HostAuthContext
-from customer_ai_runtime.providers.base import LLMProvider
-
 from customer_ai_runtime.application.handoff import HandoffService
 from customer_ai_runtime.application.knowledge import KnowledgeService
 from customer_ai_runtime.application.routing import RoutingService
-from customer_ai_runtime.application.runtime import DiagnosticsService, MetricsService, RuntimeConfigService, zh
+from customer_ai_runtime.application.runtime import (
+    DiagnosticsService,
+    MetricsService,
+    RuntimeConfigService,
+    zh,
+)
 from customer_ai_runtime.application.session import SessionService
 from customer_ai_runtime.application.tooling import ToolService
+from customer_ai_runtime.domain.models import (
+    BusinessResult,
+    DiagnosticLevel,
+    LLMRequest,
+    MessageRole,
+    RouteType,
+)
+from customer_ai_runtime.domain.platform import HostAuthContext
+from customer_ai_runtime.providers.base import LLMProvider
 
 
 class ChatService:
@@ -71,7 +81,9 @@ class ChatService:
             user_message=message,
         )
         route_decision = await self.routing_service.decide(message, business_context)
-        business_context = self.routing_service.apply_context_snapshot(business_context, route_decision)
+        business_context = self.routing_service.apply_context_snapshot(
+            business_context, route_decision
+        )
         self.diagnostics.record(
             DiagnosticLevel.INFO,
             "chat.route_decided",
@@ -101,7 +113,9 @@ class ChatService:
         effective_hit_count = 0
 
         if route_decision.route == RouteType.BUSINESS and route_decision.tool_name:
-            parameters = self.routing_service.extract_tool_parameters(route_decision.tool_name, message)
+            parameters = self.routing_service.extract_tool_parameters(
+                route_decision.tool_name, message
+            )
             tool_result = await self.tool_service.execute(
                 business_context=business_context,
                 tool_name=route_decision.tool_name,
@@ -133,7 +147,9 @@ class ChatService:
                 )
                 knowledge_version_id = citations[0].version_id if citations else None
                 filtered_citations = [
-                    citation for citation in citations if citation.score >= policies.knowledge_min_score
+                    citation
+                    for citation in citations
+                    if citation.score >= policies.knowledge_min_score
                 ]
                 effective_hit_count = len(filtered_citations)
                 if not filtered_citations:
@@ -153,7 +169,9 @@ class ChatService:
                         },
                     )
                 citations = filtered_citations or citations[:1]
-                knowledge_version_id = citations[0].version_id if citations else knowledge_version_id
+                knowledge_version_id = (
+                    citations[0].version_id if citations else knowledge_version_id
+                )
                 self.diagnostics.record(
                     DiagnosticLevel.INFO,
                     "chat.knowledge_retrieved",
@@ -262,11 +280,16 @@ class ChatService:
                 "industry": business_context.industry,
                 "intent": route_decision.intent,
                 "route_confidence_band": route_decision.confidence_band,
-                "knowledge_base_id": knowledge_base_id if route_decision.route == RouteType.KNOWLEDGE else None,
+                "knowledge_base_id": knowledge_base_id
+                if route_decision.route == RouteType.KNOWLEDGE
+                else None,
                 "knowledge_version_id": knowledge_version_id,
-                "knowledge_effective_hit": effective_hit_count > 0 if route_decision.route == RouteType.KNOWLEDGE else None,
+                "knowledge_effective_hit": effective_hit_count > 0
+                if route_decision.route == RouteType.KNOWLEDGE
+                else None,
             },
         )
+        duration_ms: int | None = None
         if started_at is not None:
             duration_ms = max(1, int((perf_counter() - started_at) * 1000))
             self.session_service.record_response_timing(session, duration_ms)
@@ -283,6 +306,8 @@ class ChatService:
                 "route": route_decision.route.value,
                 "confidence": response_payload["confidence"],
                 "industry": business_context.industry,
+                "channel": channel,
+                "duration_ms": duration_ms,
             },
         )
         response_payload.pop("requires_handoff", None)

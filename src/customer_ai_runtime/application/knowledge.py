@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
+from customer_ai_runtime.application.runtime import zh
 from customer_ai_runtime.core.errors import AppError
 from customer_ai_runtime.core.text import build_embedding, chunk_text, cosine_similarity
 from customer_ai_runtime.domain.models import (
@@ -16,15 +17,13 @@ from customer_ai_runtime.domain.models import (
 )
 from customer_ai_runtime.providers.base import VectorStoreProvider
 from customer_ai_runtime.providers.local import citations_from_hits
-from customer_ai_runtime.repositories.memory import InMemoryKnowledgeRepository
-
-from customer_ai_runtime.application.runtime import zh
+from customer_ai_runtime.repositories.base import KnowledgeRepository
 
 
 class KnowledgeService:
     def __init__(
         self,
-        repository: InMemoryKnowledgeRepository,
+        repository: KnowledgeRepository,
         vector_store: VectorStoreProvider,
     ) -> None:
         self._repository = repository
@@ -87,7 +86,9 @@ class KnowledgeService:
         versions.sort(key=lambda item: item.created_at, reverse=True)
         return versions
 
-    def get_version(self, tenant_id: str, knowledge_base_id: str, version_id: str) -> KnowledgeVersion:
+    def get_version(
+        self, tenant_id: str, knowledge_base_id: str, version_id: str
+    ) -> KnowledgeVersion:
         self.get_knowledge_base(tenant_id, knowledge_base_id)
         version = self._repository.get_version(tenant_id, knowledge_base_id, version_id)
         if not version:
@@ -229,9 +230,13 @@ class KnowledgeService:
             if chunk.content.strip()
         ]
         duplicate_count = len(normalized_chunks) - len(set(normalized_chunks))
-        duplicate_ratio = 0.0 if not normalized_chunks else round(duplicate_count / len(normalized_chunks), 4)
+        duplicate_ratio = (
+            0.0 if not normalized_chunks else round(duplicate_count / len(normalized_chunks), 4)
+        )
         empty_documents = sum(1 for document in documents if not document.content.strip())
-        average_chunk_length = 0.0 if not chunk_lengths else round(sum(chunk_lengths) / len(chunk_lengths), 2)
+        average_chunk_length = (
+            0.0 if not chunk_lengths else round(sum(chunk_lengths) / len(chunk_lengths), 2)
+        )
         score = 100.0
         if knowledge_base.document_count == 0:
             score -= 40
@@ -273,7 +278,9 @@ class KnowledgeService:
         if not documents:
             raise AppError(
                 code="validation_error",
-                message=zh("\\u77e5\\u8bc6\\u5e93\\u6682\\u65e0\\u6587\\u6863\\uff0c\\u65e0\\u6cd5\\u751f\\u6210\\u5207\\u7247\\u4f18\\u5316\\u5efa\\u8bae"),
+                message=zh(
+                    "\\u77e5\\u8bc6\\u5e93\\u6682\\u65e0\\u6587\\u6863\\uff0c\\u65e0\\u6cd5\\u751f\\u6210\\u5207\\u7247\\u4f18\\u5316\\u5efa\\u8bae"
+                ),
                 status_code=400,
             )
         current = (active_version.chunk_config.max_tokens, active_version.chunk_config.overlap)
@@ -343,12 +350,10 @@ class KnowledgeService:
             source_version_id=source_version.version_id,
         )
         cloned_documents = [
-            document.model_copy(update={"version_id": version.version_id})
-            for document in documents
+            document.model_copy(update={"version_id": version.version_id}) for document in documents
         ]
         cloned_chunks = [
-            chunk.model_copy(update={"version_id": version.version_id})
-            for chunk in chunks
+            chunk.model_copy(update={"version_id": version.version_id}) for chunk in chunks
         ]
         self._repository.save_version(version)
         self._repository.replace_documents(
@@ -366,7 +371,9 @@ class KnowledgeService:
         await self._vector_store.upsert(
             self._vectorize_chunks(knowledge_base_id, version.version_id, cloned_chunks)
         )
-        knowledge_base.version_count = len(self._repository.list_versions(tenant_id, knowledge_base_id))
+        knowledge_base.version_count = len(
+            self._repository.list_versions(tenant_id, knowledge_base_id)
+        )
         self._repository.save_knowledge_base(knowledge_base)
         return version
 
@@ -390,7 +397,9 @@ class KnowledgeService:
         if not documents:
             raise AppError(
                 code="validation_error",
-                message=zh("\\u77e5\\u8bc6\\u5e93\\u6682\\u65e0\\u6587\\u6863\\uff0c\\u65e0\\u6cd5\\u6267\\u884c\\u5207\\u7247\\u4f18\\u5316"),
+                message=zh(
+                    "\\u77e5\\u8bc6\\u5e93\\u6682\\u65e0\\u6587\\u6863\\uff0c\\u65e0\\u6cd5\\u6267\\u884c\\u5207\\u7247\\u4f18\\u5316"
+                ),
                 status_code=400,
             )
         chunk_config = KnowledgeChunkConfig(max_tokens=max_tokens, overlap=overlap)
@@ -406,8 +415,7 @@ class KnowledgeService:
             activated_at=utcnow() if activate else None,
         )
         cloned_documents = [
-            document.model_copy(update={"version_id": version.version_id})
-            for document in documents
+            document.model_copy(update={"version_id": version.version_id}) for document in documents
         ]
         optimized_chunks = [
             chunk
@@ -441,7 +449,9 @@ class KnowledgeService:
             version = self.activate_version(tenant_id, knowledge_base_id, version.version_id)
             knowledge_base = self.get_knowledge_base(tenant_id, knowledge_base_id)
         else:
-            knowledge_base.version_count = len(self._repository.list_versions(tenant_id, knowledge_base_id))
+            knowledge_base.version_count = len(
+                self._repository.list_versions(tenant_id, knowledge_base_id)
+            )
             self._repository.save_knowledge_base(knowledge_base)
         return {
             "knowledge_base": knowledge_base,
@@ -527,20 +537,14 @@ class KnowledgeService:
             self._repository.replace_documents(
                 knowledge_base.tenant_id,
                 knowledge_base.knowledge_base_id,
-                [
-                    document.model_copy(update={"version_id": "legacy"})
-                    for document in documents
-                ],
+                [document.model_copy(update={"version_id": "legacy"}) for document in documents],
                 version_id="legacy",
             )
         if chunks:
             self._repository.replace_chunks(
                 knowledge_base.tenant_id,
                 knowledge_base.knowledge_base_id,
-                [
-                    chunk.model_copy(update={"version_id": "legacy"})
-                    for chunk in chunks
-                ],
+                [chunk.model_copy(update={"version_id": "legacy"}) for chunk in chunks],
                 version_id="legacy",
             )
         return legacy_version
@@ -584,10 +588,7 @@ class KnowledgeService:
         chunks: list[KnowledgeChunk],
     ) -> list[KnowledgeChunk]:
         namespace = self._version_namespace(knowledge_base_id, version_id)
-        return [
-            chunk.model_copy(update={"knowledge_base_id": namespace})
-            for chunk in chunks
-        ]
+        return [chunk.model_copy(update={"knowledge_base_id": namespace}) for chunk in chunks]
 
     def _normalize_hits(
         self,
@@ -630,7 +631,9 @@ class KnowledgeService:
             )
         ]
         chunk_lengths = [len(chunk.content.split()) for chunk in chunks if chunk.content.strip()]
-        average_chunk_length = 0.0 if not chunk_lengths else round(sum(chunk_lengths) / len(chunk_lengths), 2)
+        average_chunk_length = (
+            0.0 if not chunk_lengths else round(sum(chunk_lengths) / len(chunk_lengths), 2)
+        )
         normalized_chunks = [
             " ".join(chunk.content.split()).strip().lower()
             for chunk in chunks
@@ -639,7 +642,9 @@ class KnowledgeService:
         duplicate_ratio = (
             0.0
             if not normalized_chunks
-            else round((len(normalized_chunks) - len(set(normalized_chunks))) / len(normalized_chunks), 4)
+            else round(
+                (len(normalized_chunks) - len(set(normalized_chunks))) / len(normalized_chunks), 4
+            )
         )
         query_support = 0.0
         if miss_queries and chunks:

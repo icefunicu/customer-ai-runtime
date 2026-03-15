@@ -62,9 +62,9 @@ class TencentASRProvider(ASRProvider):
                 message=(
                     "腾讯云语音提供商缺少依赖，请安装 "
                     "`tencentcloud-sdk-python-asr`、`tencentcloud-sdk-python-tts` "
-                    "或使用 `pip install -e \".[providers]\"`。"
+                    '或使用 `pip install -e ".[providers]"`。'
                 ),
-                status_code=500,
+                status_code=503,
             ) from exc
 
         credential = credential_module.Credential(
@@ -142,9 +142,9 @@ class TencentTTSProvider(TTSProvider):
                 message=(
                     "腾讯云语音提供商缺少依赖，请安装 "
                     "`tencentcloud-sdk-python-asr`、`tencentcloud-sdk-python-tts` "
-                    "或使用 `pip install -e \".[providers]\"`。"
+                    '或使用 `pip install -e ".[providers]"`。'
                 ),
-                status_code=500,
+                status_code=503,
             ) from exc
 
         credential = credential_module.Credential(
@@ -184,7 +184,7 @@ def _ensure_tencent_speech_config(settings: Settings) -> None:
             "腾讯云语音提供商缺少必要配置，请设置 "
             "`CUSTOMER_AI_TENCENT_SECRET_ID` 和 `CUSTOMER_AI_TENCENT_SECRET_KEY`。"
         ),
-        status_code=500,
+        status_code=503,
     )
 
 

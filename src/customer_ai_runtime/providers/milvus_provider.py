@@ -16,7 +16,7 @@ class MilvusVectorStoreProvider(VectorStoreProvider):
             raise AppError(
                 code="provider_error",
                 message="未配置 CUSTOMER_AI_MILVUS_URI，无法启用 Milvus 提供商。",
-                status_code=500,
+                status_code=503,
             )
         self._settings = settings
         self._client = self._build_client()
@@ -101,7 +101,7 @@ class MilvusVectorStoreProvider(VectorStoreProvider):
             raise AppError(
                 code="provider_error",
                 message="未安装 pymilvus，请先安装 `pymilvus`。",
-                status_code=500,
+                status_code=503,
             ) from exc
         return MilvusClient(uri=self._settings.milvus_uri, token=self._settings.milvus_token)
 

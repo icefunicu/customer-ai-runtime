@@ -14,7 +14,7 @@ class HttpBusinessAdapter(BusinessAdapter):
             raise AppError(
                 code="provider_error",
                 message="未配置 CUSTOMER_AI_BUSINESS_API_BASE_URL，无法启用 HTTP 业务适配器。",
-                status_code=500,
+                status_code=503,
             )
         self._base_url = settings.business_api_base_url.rstrip("/")
         self._api_key = settings.business_api_key

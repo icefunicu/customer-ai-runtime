@@ -11,7 +11,7 @@ services:
     env_file:
       - ../.env
     environment:
-      CUSTOMER_AI_ENV: ${CUSTOMER_AI_ENV:-prod}
+      CUSTOMER_AI_ENV: ${CUSTOMER_AI_ENV:-dev}
       CUSTOMER_AI_HOST: 0.0.0.0
       CUSTOMER_AI_PORT: 8000
       CUSTOMER_AI_STORAGE_ROOT: /data

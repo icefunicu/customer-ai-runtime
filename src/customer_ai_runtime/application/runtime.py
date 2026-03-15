@@ -5,6 +5,9 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from customer_ai_runtime.core.diagnostics_export import DiagnosticsJsonlExporter
+from customer_ai_runtime.core.redaction import sanitize_context
+from customer_ai_runtime.core.request_context import get_request_id
 from customer_ai_runtime.domain.models import (
     AlertRuleConfig,
     DiagnosticEvent,
@@ -12,7 +15,7 @@ from customer_ai_runtime.domain.models import (
     PolicyConfig,
     PromptConfig,
 )
-from customer_ai_runtime.repositories.memory import InMemoryDiagnosticsRepository
+from customer_ai_runtime.repositories.base import DiagnosticsRepository
 
 
 def zh(text: str) -> str:
@@ -132,8 +135,13 @@ class MetricsService:
 
 
 class DiagnosticsService:
-    def __init__(self, repository: InMemoryDiagnosticsRepository) -> None:
+    def __init__(
+        self,
+        repository: DiagnosticsRepository,
+        exporter: DiagnosticsJsonlExporter | None = None,
+    ) -> None:
         self._repository = repository
+        self._exporter = exporter
 
     def record(
         self,
@@ -142,9 +150,14 @@ class DiagnosticsService:
         message: str,
         context: dict[str, Any] | None = None,
     ) -> None:
-        self._repository.add(
-            DiagnosticEvent(level=level, code=code, message=message, context=context or {})
-        )
+        sanitized = sanitize_context(context or {})
+        request_id = get_request_id()
+        if request_id:
+            sanitized.setdefault("request_id", request_id)
+        event = DiagnosticEvent(level=level, code=code, message=message, context=sanitized)
+        self._repository.add(event)
+        if self._exporter is not None:
+            self._exporter.export(event.model_dump(mode="json"))
 
     def list_recent(self) -> list[DiagnosticEvent]:
         return self._repository.list_recent()

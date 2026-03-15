@@ -282,9 +282,7 @@ class ResponseEnhancementOrchestrator:
         if isinstance(tool_result, dict):
             formatted_tool_result = dict(tool_result)
             if not formatted["answer"] and formatted_tool_result.get("summary"):
-                formatted["answer"] = self._format_text_block(
-                    formatted_tool_result.get("summary")
-                )
+                formatted["answer"] = self._format_text_block(formatted_tool_result.get("summary"))
             formatted_tool_result["summary"] = self._format_text_block(
                 formatted_tool_result.get("summary")
             )

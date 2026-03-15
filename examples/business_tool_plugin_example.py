@@ -39,7 +39,9 @@ class TenantOrderStatusToolPlugin(BusinessToolPlugin):
         resolved = dict(parameters)
         business_objects = context.integration_context.get("business_objects") or {}
         if not resolved.get("order_id"):
-            order_id = business_objects.get("order_id") or context.integration_context.get("order_id")
+            order_id = business_objects.get("order_id") or context.integration_context.get(
+                "order_id"
+            )
             if order_id:
                 resolved["order_id"] = order_id
         return resolved

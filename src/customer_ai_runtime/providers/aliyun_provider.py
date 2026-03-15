@@ -39,9 +39,7 @@ class AliyunASRProvider(ASRProvider):
             "enable_inverse_text_normalization": str(
                 self._settings.aliyun_asr_enable_inverse_text_normalization
             ).lower(),
-            "enable_voice_detection": str(
-                self._settings.aliyun_asr_enable_voice_detection
-            ).lower(),
+            "enable_voice_detection": str(self._settings.aliyun_asr_enable_voice_detection).lower(),
         }
 
         async with httpx.AsyncClient(
@@ -146,9 +144,9 @@ class _AliyunTokenProvider:
                 code="provider_error",
                 message=(
                     "阿里云语音提供商缺少依赖，请安装 `aliyun-python-sdk-core` "
-                    "或使用 `pip install -e \".[providers]\"`。"
+                    '或使用 `pip install -e ".[providers]"`。'
                 ),
-                status_code=500,
+                status_code=503,
             ) from exc
 
         acs_client = client_module.AcsClient(
@@ -198,7 +196,7 @@ def _ensure_aliyun_speech_config(settings: Settings) -> None:
             "`CUSTOMER_AI_ALIYUN_ACCESS_KEY_SECRET` 和 "
             "`CUSTOMER_AI_ALIYUN_APP_KEY`。"
         ),
-        status_code=500,
+        status_code=503,
     )
 
 

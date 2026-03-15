@@ -3,16 +3,23 @@ from __future__ import annotations
 from time import perf_counter
 from typing import Any
 
-from customer_ai_runtime.core.errors import AppError
-from customer_ai_runtime.domain.models import ASRRequest, Channel, RTCRoom, RTCState, TTSRequest, utcnow
-from customer_ai_runtime.domain.platform import HostAuthContext
-from customer_ai_runtime.providers.base import ASRProvider, TTSProvider
-from customer_ai_runtime.repositories.memory import InMemoryRTCRepository
-
 from customer_ai_runtime.application.chat import ChatService
 from customer_ai_runtime.application.runtime import DiagnosticsService, MetricsService, zh
 from customer_ai_runtime.application.session import SessionService
-from customer_ai_runtime.domain.models import DiagnosticLevel
+from customer_ai_runtime.core.errors import AppError
+from customer_ai_runtime.core.limits import AUDIO_BASE64_MAX_CHARS
+from customer_ai_runtime.domain.models import (
+    ASRRequest,
+    Channel,
+    DiagnosticLevel,
+    RTCRoom,
+    RTCState,
+    TTSRequest,
+    utcnow,
+)
+from customer_ai_runtime.domain.platform import HostAuthContext
+from customer_ai_runtime.providers.base import ASRProvider, TTSProvider
+from customer_ai_runtime.repositories.base import RTCRepository
 
 
 class VoiceService:
@@ -91,7 +98,7 @@ class VoiceService:
 class RTCService:
     def __init__(
         self,
-        repository: InMemoryRTCRepository,
+        repository: RTCRepository,
         session_service: SessionService,
         voice_service: VoiceService,
         metrics: MetricsService,
@@ -202,6 +209,61 @@ class RTCService:
                 message=zh("\\u4e0d\\u652f\\u6301\\u7684 RTC \\u4e8b\\u4ef6"),
                 status_code=400,
             )
+
+        audio_base64 = payload.get("audio_base64")
+        if not isinstance(audio_base64, str) or not audio_base64.strip():
+            raise AppError(
+                code="validation_error",
+                message=zh("\\u7f3a\\u5c11\\u97f3\\u9891\\u8f7d\\u8377"),
+                status_code=400,
+                details={"field": "audio_base64"},
+            )
+        if len(audio_base64) > AUDIO_BASE64_MAX_CHARS:
+            raise AppError(
+                code="payload_too_large",
+                message=zh("\\u97f3\\u9891\\u8f7d\\u8377\\u8fc7\\u5927"),
+                status_code=413,
+                details={"field": "audio_base64", "max_chars": AUDIO_BASE64_MAX_CHARS},
+            )
+        content_type = payload.get("content_type", "text/plain")
+        if not isinstance(content_type, str) or not content_type or len(content_type) > 128:
+            raise AppError(
+                code="validation_error",
+                message=zh("\\u97f3\\u9891\\u7c7b\\u578b\\u4e0d\\u5408\\u6cd5"),
+                status_code=400,
+                details={"field": "content_type"},
+            )
+        transcript_hint = payload.get("transcript_hint")
+        if transcript_hint is not None and (
+            not isinstance(transcript_hint, str) or len(transcript_hint) > 4000
+        ):
+            raise AppError(
+                code="validation_error",
+                message=zh(
+                    "\\u63d0\\u793a\\u6587\\u672c\\u8fc7\\u957f\\u6216\\u7c7b\\u578b\\u4e0d\\u5408\\u6cd5"
+                ),
+                status_code=400,
+                details={"field": "transcript_hint"},
+            )
+        integration_context = payload.get("integration_context")
+        if integration_context is not None and not isinstance(integration_context, dict):
+            raise AppError(
+                code="validation_error",
+                message=zh("\\u4e0a\\u4e0b\\u6587\\u7c7b\\u578b\\u4e0d\\u5408\\u6cd5"),
+                status_code=400,
+                details={"field": "integration_context"},
+            )
+        knowledge_base_id = payload.get("knowledge_base_id")
+        if knowledge_base_id is not None and (
+            not isinstance(knowledge_base_id, str) or len(knowledge_base_id) > 64
+        ):
+            raise AppError(
+                code="validation_error",
+                message=zh("\\u77e5\\u8bc6\\u5e93 ID \\u4e0d\\u5408\\u6cd5"),
+                status_code=400,
+                details={"field": "knowledge_base_id"},
+            )
+
         room.state = RTCState.THINKING
         room.updated_at = utcnow()
         self.repository.save(room)
@@ -209,11 +271,11 @@ class RTCService:
             tenant_id=tenant_id,
             session_id=room.session_id,
             channel=Channel.RTC.value,
-            audio_base64=payload["audio_base64"],
-            content_type=payload.get("content_type", "text/plain"),
-            transcript_hint=payload.get("transcript_hint"),
-            knowledge_base_id=payload.get("knowledge_base_id"),
-            integration_context=payload.get("integration_context"),
+            audio_base64=audio_base64,
+            content_type=content_type,
+            transcript_hint=transcript_hint,
+            knowledge_base_id=knowledge_base_id,
+            integration_context=integration_context,
             host_auth_context=host_auth_context,
         )
         room.last_transcript = voice_result["transcript"]

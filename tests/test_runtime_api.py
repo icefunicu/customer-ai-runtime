@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import base64
 import hashlib
@@ -14,9 +14,13 @@ from customer_ai_runtime.app import create_app
 from customer_ai_runtime.application.auth import AuthBridgePlugin
 from customer_ai_runtime.application.plugins import PluginDescriptor
 from customer_ai_runtime.core.config import get_settings
-from customer_ai_runtime.domain.platform import AuthMode, AuthRequestContext, PluginKind, ResolvedAuthContext
+from customer_ai_runtime.domain.platform import (
+    AuthMode,
+    AuthRequestContext,
+    PluginKind,
+    ResolvedAuthContext,
+)
 from customer_ai_runtime.integration import CustomerAIRuntimeModule
-
 
 CUSTOMER_HEADERS = {"X-API-Key": "demo-public-key"}
 ADMIN_HEADERS = {"X-API-Key": "demo-admin-key"}
@@ -49,7 +53,10 @@ def seed_knowledge_base(client: TestClient) -> None:
         json={
             "tenant_id": "demo-tenant",
             "title": "\u9000\u6b3e\u89c4\u5219",
-            "content": "\u4e03\u5929\u65e0\u7406\u7531\u9000\u6b3e\uff0c\u552e\u540e\u5de5\u5355 24 \u5c0f\u65f6\u5185\u54cd\u5e94\u3002",
+            "content": (
+                "\u4e03\u5929\u65e0\u7406\u7531\u9000\u6b3e\uff0c"
+                "\u552e\u540e\u5de5\u5355 24 \u5c0f\u65f6\u5185\u54cd\u5e94\u3002"
+            ),
             "metadata": {"source": "help-center"},
         },
     )
@@ -114,7 +121,9 @@ def test_chat_business_flow(client: TestClient) -> None:
         json={
             "tenant_id": "demo-tenant",
             "channel": "web",
-            "message": "\u6211\u7684\u8ba2\u5355 ORD-1001 \u4ec0\u4e48\u65f6\u5019\u53d1\u8d27\uff1f",
+            "message": (
+                "\u6211\u7684\u8ba2\u5355 ORD-1001 \u4ec0\u4e48\u65f6\u5019\u53d1\u8d27\uff1f"
+            ),
         },
     )
     assert response.status_code == 200
@@ -171,7 +180,10 @@ def test_handoff_flow(client: TestClient) -> None:
     human_reply = client.post(
         f"/api/v1/sessions/{data['session_id']}/messages/human",
         headers=ADMIN_HEADERS,
-        json={"tenant_id": "demo-tenant", "content": "\u4eba\u5de5\u5ba2\u670d\u5df2\u63a5\u624b\u5904\u7406"},
+        json={
+            "tenant_id": "demo-tenant",
+            "content": "\u4eba\u5de5\u5ba2\u670d\u5df2\u63a5\u624b\u5904\u7406",
+        },
     )
     assert human_reply.status_code == 200
     assert human_reply.json()["data"]["messages"][-1]["role"] == "human"
@@ -204,7 +216,9 @@ def test_message_feedback_records_upvote_and_updates_summary(client: TestClient)
         params={"tenant_id": "demo-tenant"},
     )
     assert messages.status_code == 200
-    assistant_message = next(item for item in messages.json()["data"] if item["role"] == "assistant")
+    assistant_message = next(
+        item for item in messages.json()["data"] if item["role"] == "assistant"
+    )
 
     feedback = client.post(
         f"/api/v1/sessions/{session_id}/messages/{assistant_message['message_id']}/feedback",
@@ -264,7 +278,9 @@ def test_message_feedback_can_request_human_handoff(client: TestClient) -> None:
         params={"tenant_id": "demo-tenant"},
     )
     assert messages.status_code == 200
-    assistant_message = next(item for item in messages.json()["data"] if item["role"] == "assistant")
+    assistant_message = next(
+        item for item in messages.json()["data"] if item["role"] == "assistant"
+    )
 
     feedback = client.post(
         f"/api/v1/sessions/{session_id}/messages/{assistant_message['message_id']}/feedback",
@@ -485,7 +501,7 @@ def test_rtc_websocket_flow(client: TestClient) -> None:
             {
                 "type": "user_audio",
                 "audio_base64": base64.b64encode(
-                    "\u6211\u7684\u8ba2\u5355 ORD-1001 \u53d1\u8d27\u4e86\u5417".encode("utf-8")
+                    "\u6211\u7684\u8ba2\u5355 ORD-1001 \u53d1\u8d27\u4e86\u5417".encode()
                 ).decode("utf-8"),
                 "content_type": "text/plain",
             }
@@ -759,9 +775,7 @@ def test_admin_metrics_summary_and_alerts(client: TestClient) -> None:
         params={"tenant_id": "demo-tenant"},
     )
     assert alerts_after_threshold.status_code == 200
-    alert_payload = {
-        item["code"]: item for item in alerts_after_threshold.json()["data"]
-    }
+    alert_payload = {item["code"]: item for item in alerts_after_threshold.json()["data"]}
     assert "session.waiting_human_threshold" in alert_payload
     assert alert_payload["session.waiting_human_threshold"]["count"] >= 2
     assert alert_payload["session.waiting_human_threshold"]["threshold"] == 2
@@ -938,7 +952,9 @@ def test_jwt_auth_bridge_chat_flow(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     get_settings.cache_clear()
 
 
-def test_custom_token_auth_bridge_and_plugin_toggle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_custom_token_auth_bridge_and_plugin_toggle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("CUSTOMER_AI_STORAGE_ROOT", str(tmp_path / "storage"))
     monkeypatch.setenv(
         "CUSTOMER_AI_HOST_TOKEN_MAP_JSON",
@@ -976,14 +992,14 @@ def test_custom_token_auth_bridge_and_plugin_toggle(tmp_path: Path, monkeypatch:
 
         chat_after_disable = local_client.post(
             "/api/v1/chat/messages",
-                headers={"X-Host-Token": "host-token-1"},
-                    json={
-                        "tenant_id": "demo-tenant",
-                        "channel": "web",
-                        "message": "order-check ORD-1001",
-                        "integration_context": {"industry": "ecommerce"},
-                    },
-            )
+            headers={"X-Host-Token": "host-token-1"},
+            json={
+                "tenant_id": "demo-tenant",
+                "channel": "web",
+                "message": "order-check ORD-1001",
+                "integration_context": {"industry": "ecommerce"},
+            },
+        )
         assert chat_after_disable.status_code == 200
         assert chat_after_disable.json()["data"]["route"] == "fallback"
 
@@ -996,14 +1012,14 @@ def test_custom_token_auth_bridge_and_plugin_toggle(tmp_path: Path, monkeypatch:
 
         chat_after_enable = local_client.post(
             "/api/v1/chat/messages",
-                headers={"X-Host-Token": "host-token-1"},
-                    json={
-                        "tenant_id": "demo-tenant",
-                        "channel": "web",
-                        "message": "order-check ORD-1001",
-                        "integration_context": {"industry": "ecommerce"},
-                    },
-            )
+            headers={"X-Host-Token": "host-token-1"},
+            json={
+                "tenant_id": "demo-tenant",
+                "channel": "web",
+                "message": "order-check ORD-1001",
+                "integration_context": {"industry": "ecommerce"},
+            },
+        )
         assert chat_after_enable.status_code == 200
         data = chat_after_enable.json()["data"]
         assert data["route"] == "business"
@@ -1146,7 +1162,9 @@ def test_embedded_module_mount_to_host(tmp_path: Path, monkeypatch: pytest.Monke
     get_settings.cache_clear()
 
 
-def test_embedded_module_custom_auth_bridge(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_embedded_module_custom_auth_bridge(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("CUSTOMER_AI_STORAGE_ROOT", str(tmp_path / "storage"))
     get_settings.cache_clear()
     host_app = FastAPI()
@@ -1211,7 +1229,10 @@ def test_admin_knowledge_version_snapshot_and_activate(client: TestClient) -> No
         json={"tenant_id": "demo-tenant"},
     )
     assert activate_snapshot.status_code == 200
-    assert activate_snapshot.json()["data"]["knowledge_base"]["active_version_id"] == snapshot_version_id
+    assert (
+        activate_snapshot.json()["data"]["knowledge_base"]["active_version_id"]
+        == snapshot_version_id
+    )
     assert activate_snapshot.json()["data"]["version"]["status"] == "active"
 
     rollback = client.post(
@@ -1234,7 +1255,10 @@ def test_admin_chunk_optimization_report_and_apply(client: TestClient) -> None:
             "title": "optimization guide",
             "content": " ".join(
                 [
-                    "refund entry is on the order detail page and requests are processed within 24 hours."
+                    (
+                        "refund entry is on the order detail page and requests are processed "
+                        "within 24 hours."
+                    )
                 ]
                 * 20
             ),
@@ -1300,7 +1324,9 @@ def test_admin_knowledge_effectiveness_report(client: TestClient) -> None:
         params={"tenant_id": "demo-tenant"},
     )
     assert messages.status_code == 200
-    assistant_message = next(item for item in messages.json()["data"] if item["role"] == "assistant")
+    assistant_message = next(
+        item for item in messages.json()["data"] if item["role"] == "assistant"
+    )
 
     feedback = client.post(
         f"/api/v1/sessions/{session_id}/messages/{assistant_message['message_id']}/feedback",

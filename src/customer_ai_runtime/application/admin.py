@@ -16,6 +16,19 @@ from customer_ai_runtime.application.voice_rtc import RTCService
 from customer_ai_runtime.core.config import Settings
 
 
+def _percentile_ms(values: list[int], quantile: float) -> float | None:
+    if not values:
+        return None
+    if quantile <= 0:
+        return float(min(values))
+    if quantile >= 1:
+        return float(max(values))
+    ordered = sorted(values)
+    index = int(round((len(ordered) - 1) * quantile))
+    index = max(0, min(index, len(ordered) - 1))
+    return float(ordered[index])
+
+
 class AdminService:
     def __init__(
         self,
@@ -60,9 +73,13 @@ class AdminService:
         waiting_human = sum(1 for session in sessions if session.waiting_human)
         rated_sessions = [session for session in sessions if session.satisfaction_score is not None]
         satisfaction_distribution = Counter(
-            str(session.satisfaction_score) for session in rated_sessions if session.satisfaction_score is not None
+            str(session.satisfaction_score)
+            for session in rated_sessions
+            if session.satisfaction_score is not None
         )
-        resolved_sessions = [session for session in sessions if session.resolution_status is not None]
+        resolved_sessions = [
+            session for session in sessions if session.resolution_status is not None
+        ]
         resolution_distribution = Counter(
             session.resolution_status.value
             for session in resolved_sessions
@@ -82,13 +99,18 @@ class AdminService:
         average_satisfaction = None
         if rated_sessions:
             average_satisfaction = round(
-                sum(session.satisfaction_score or 0 for session in rated_sessions) / len(rated_sessions),
+                sum(session.satisfaction_score or 0 for session in rated_sessions)
+                / len(rated_sessions),
                 2,
             )
-        tracked_sessions = [session for session in sessions if session.first_response_time is not None]
+        tracked_sessions = [
+            session for session in sessions if session.first_response_time is not None
+        ]
         channel_breakdown: dict[str, dict[str, Any]] = {}
         for channel in {session.channel for session in tracked_sessions}:
-            channel_sessions = [session for session in tracked_sessions if session.channel == channel]
+            channel_sessions = [
+                session for session in tracked_sessions if session.channel == channel
+            ]
             channel_breakdown[channel] = {
                 "sessions": len(channel_sessions),
                 "first_response_avg_ms": round(
@@ -102,6 +124,19 @@ class AdminService:
                     2,
                 ),
             }
+
+        duration_samples: list[int] = []
+        duration_by_channel: dict[str, list[int]] = {}
+        for event in diagnostics:
+            duration = event.context.get("duration_ms")
+            channel = event.context.get("channel")
+            if not isinstance(duration, int) or duration <= 0:
+                continue
+            if not isinstance(channel, str) or not channel:
+                continue
+            duration_samples.append(duration)
+            duration_by_channel.setdefault(channel, []).append(duration)
+
         return {
             "tenant_id": tenant_id,
             "counters": self.metrics.snapshot(),
@@ -142,6 +177,17 @@ class AdminService:
                     2,
                 ),
                 "channel_breakdown": channel_breakdown,
+                "turn_duration_sample_size": len(duration_samples),
+                "turn_duration_p50_ms": _percentile_ms(duration_samples, 0.50),
+                "turn_duration_p95_ms": _percentile_ms(duration_samples, 0.95),
+                "turn_duration_channel_breakdown": {
+                    channel: {
+                        "sample_size": len(samples),
+                        "p50_ms": _percentile_ms(samples, 0.50),
+                        "p95_ms": _percentile_ms(samples, 0.95),
+                    }
+                    for channel, samples in duration_by_channel.items()
+                },
             },
             "diagnostic_summary": {
                 "sample_size": len(diagnostics),
@@ -216,7 +262,9 @@ class AdminService:
     def get_knowledge_health_report(self, tenant_id: str, knowledge_base_id: str) -> dict[str, Any]:
         return self.knowledge_service.health_report(tenant_id, knowledge_base_id)
 
-    def list_knowledge_versions(self, tenant_id: str, knowledge_base_id: str) -> list[dict[str, Any]]:
+    def list_knowledge_versions(
+        self, tenant_id: str, knowledge_base_id: str
+    ) -> list[dict[str, Any]]:
         return [
             version.model_dump(mode="json")
             for version in self.knowledge_service.list_versions(tenant_id, knowledge_base_id)
@@ -256,7 +304,9 @@ class AdminService:
             "version": version.model_dump(mode="json"),
         }
 
-    def get_chunk_optimization_report(self, tenant_id: str, knowledge_base_id: str) -> dict[str, Any]:
+    def get_chunk_optimization_report(
+        self, tenant_id: str, knowledge_base_id: str
+    ) -> dict[str, Any]:
         miss_queries = [
             str(event.context.get("query") or "").strip()
             for event in self.diagnostics_service.query(
@@ -409,7 +459,9 @@ class AdminService:
                 kb_id,
                 {"response_count": 0, "feedback_count": 0, "negative_feedback_count": 0},
             )
-            effective_hits = sum(1 for event in kb_events if bool(event.context.get("effective_hit")))
+            effective_hits = sum(
+                1 for event in kb_events if bool(event.context.get("effective_hit"))
+            )
             total_queries = len(kb_events)
             hit_rate = 0.0 if total_queries == 0 else round(effective_hits / total_queries, 4)
             satisfaction_scores = session_satisfaction.get(kb_id, [])
@@ -649,26 +701,26 @@ class AdminService:
         if self.settings.asr_provider == "openai":
             return bool(self.settings.openai_api_key)
         if self.settings.asr_provider == "aliyun":
-            return bool(self.settings.aliyun_access_key_id) and bool(
-                self.settings.aliyun_access_key_secret
-            ) and bool(self.settings.aliyun_app_key)
-        if self.settings.asr_provider == "tencent":
-            return bool(self.settings.tencent_secret_id) and bool(
-                self.settings.tencent_secret_key
+            return (
+                bool(self.settings.aliyun_access_key_id)
+                and bool(self.settings.aliyun_access_key_secret)
+                and bool(self.settings.aliyun_app_key)
             )
+        if self.settings.asr_provider == "tencent":
+            return bool(self.settings.tencent_secret_id) and bool(self.settings.tencent_secret_key)
         return True
 
     def _tts_ready(self) -> bool:
         if self.settings.tts_provider == "openai":
             return bool(self.settings.openai_api_key)
         if self.settings.tts_provider == "aliyun":
-            return bool(self.settings.aliyun_access_key_id) and bool(
-                self.settings.aliyun_access_key_secret
-            ) and bool(self.settings.aliyun_app_key)
-        if self.settings.tts_provider == "tencent":
-            return bool(self.settings.tencent_secret_id) and bool(
-                self.settings.tencent_secret_key
+            return (
+                bool(self.settings.aliyun_access_key_id)
+                and bool(self.settings.aliyun_access_key_secret)
+                and bool(self.settings.aliyun_app_key)
             )
+        if self.settings.tts_provider == "tencent":
+            return bool(self.settings.tencent_secret_id) and bool(self.settings.tencent_secret_key)
         return True
 
     def _vector_ready(self) -> bool:

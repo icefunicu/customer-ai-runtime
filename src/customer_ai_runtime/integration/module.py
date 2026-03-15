@@ -23,7 +23,7 @@ class CustomerAIRuntimeModule:
         settings: Settings | None = None,
         overrides: ContainerOverrides | None = None,
         route_prefix: str = "",
-    ) -> "CustomerAIRuntimeModule":
+    ) -> CustomerAIRuntimeModule:
         resolved_settings = settings or get_settings()
         container = build_container(resolved_settings, overrides=overrides)
         return cls(container=container, route_prefix=route_prefix)

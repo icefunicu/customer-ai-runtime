@@ -16,16 +16,15 @@ class PineconeVectorStoreProvider(VectorStoreProvider):
             raise AppError(
                 code="provider_error",
                 message="未配置 CUSTOMER_AI_PINECONE_API_KEY，无法启用 Pinecone 提供商。",
-                status_code=500,
+                status_code=503,
             )
         if not settings.pinecone_index_host and not settings.pinecone_index_name:
             raise AppError(
                 code="provider_error",
                 message=(
-                    "未配置 CUSTOMER_AI_PINECONE_INDEX_HOST 或 "
-                    "CUSTOMER_AI_PINECONE_INDEX_NAME。"
+                    "未配置 CUSTOMER_AI_PINECONE_INDEX_HOST 或 CUSTOMER_AI_PINECONE_INDEX_NAME。"
                 ),
-                status_code=500,
+                status_code=503,
             )
         self._settings = settings
         self._index = self._build_index()
@@ -73,7 +72,7 @@ class PineconeVectorStoreProvider(VectorStoreProvider):
             raise AppError(
                 code="provider_error",
                 message="未安装 pinecone SDK，请先安装 `pinecone`。",
-                status_code=500,
+                status_code=503,
             ) from exc
 
         client = Pinecone(api_key=self._settings.pinecone_api_key)

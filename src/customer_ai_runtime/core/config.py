@@ -40,6 +40,12 @@ class Settings(BaseSettings):
     vector_provider: str = "local"
     rtc_provider: str = "local"
     business_provider: str = "local"
+    enable_api_key_auth: bool = True
+    rate_limit_enabled: bool = True
+    rate_limit_per_minute: int = 120
+    rate_limit_burst: int = 30
+    max_request_bytes: int = 3_000_000
+    diagnostics_export_path: str | None = None
 
     openai_api_key: str | None = None
     openai_base_url: str | None = None
@@ -155,6 +161,41 @@ class Settings(BaseSettings):
     def _parse_json_dict(self, raw_value: str) -> dict[str, str]:
         raw = json.loads(raw_value or "{}")
         return {str(key): str(value) for key, value in raw.items()}
+
+    def validate_startup(self) -> None:
+        env = (self.env or "").strip().lower()
+        is_prod = env in {"prod", "production"}
+        if not is_prod:
+            return
+        if not self.enable_api_key_auth:
+            return
+
+        try:
+            raw = json.loads(self.api_keys_json or "{}")
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("CUSTOMER_AI_API_KEYS_JSON is not valid JSON") from exc
+
+        if not isinstance(raw, dict) or not raw:
+            raise RuntimeError(
+                "In production, CUSTOMER_AI_API_KEYS_JSON must be explicitly configured "
+                "or disable API key auth via CUSTOMER_AI_ENABLE_API_KEY_AUTH=false."
+            )
+
+        # Forbid shipping demo keys into production.
+        demo_keys = {"demo-public-key", "demo-admin-key"}
+        configured_keys = {str(k) for k in raw.keys()}
+        if configured_keys & demo_keys:
+            raise RuntimeError(
+                "In production, demo API keys are forbidden. "
+                "Please override CUSTOMER_AI_API_KEYS_JSON with real keys."
+            )
+
+        # Also forbid the exact default mapping.
+        normalized_raw = {str(k): dict(v) for k, v in raw.items()} if isinstance(raw, dict) else {}
+        if normalized_raw == DEFAULT_API_KEYS:
+            raise RuntimeError(
+                "In production, default demo CUSTOMER_AI_API_KEYS_JSON must be overridden."
+            )
 
 
 @lru_cache(maxsize=1)

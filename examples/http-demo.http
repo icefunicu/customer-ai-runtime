@@ -1,3 +1,7 @@
+### NOTE
+# These requests use the development demo API key. In production, configure CUSTOMER_AI_API_KEYS_JSON
+# and replace demo-public-key with your real key.
+
 ### Create knowledge base
 POST http://127.0.0.1:8000/api/v1/knowledge-bases
 X-API-Key: demo-public-key
@@ -35,4 +39,3 @@ Content-Type: application/json
   "message": "What is the refund policy?",
   "knowledge_base_id": "kb_support"
 }
-

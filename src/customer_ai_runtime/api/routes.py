@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 from fastapi import APIRouter, Depends, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 
@@ -9,8 +11,8 @@ from customer_ai_runtime.api.schemas import (
     ContextResolveRequest,
     HandoffRequest,
     HumanReplyRequest,
-    KnowledgeChunkOptimizationApplyRequest,
     KnowledgeBaseCreateRequest,
+    KnowledgeChunkOptimizationApplyRequest,
     KnowledgeDocumentCreateRequest,
     KnowledgeSearchRequest,
     KnowledgeVersionActivateRequest,
@@ -27,6 +29,7 @@ from customer_ai_runtime.api.schemas import (
 )
 from customer_ai_runtime.application.container import Container
 from customer_ai_runtime.core.errors import AppError
+from customer_ai_runtime.core.request_context import reset_request_id, set_request_id
 from customer_ai_runtime.core.responses import success_response
 from customer_ai_runtime.domain.platform import ResolvedAuthContext
 
@@ -47,6 +50,11 @@ AUTH_CONTEXT_DEPENDENCY = Depends(authenticate)
 def require_admin(auth_context: ResolvedAuthContext) -> None:
     if auth_context.role != "admin":
         raise AppError(code="forbidden", message="admin only", status_code=403)
+
+
+def require_staff(auth_context: ResolvedAuthContext) -> None:
+    if auth_context.role not in {"admin", "operator"}:
+        raise AppError(code="forbidden", message="admin/operator only", status_code=403)
 
 
 @router.get("/healthz")
@@ -536,7 +544,7 @@ async def admin_metrics(
     request: Request,
     auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
-    require_admin(auth_context)
+    require_staff(auth_context)
     return success_response(get_container(request).admin_service.get_metrics())
 
 
@@ -547,7 +555,7 @@ async def admin_metrics_summary(
     auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
-    require_admin(auth_context)
+    require_staff(auth_context)
     if tenant_id is not None:
         container.access_control.validate_tenant_access(auth_context, tenant_id)
     return success_response(container.admin_service.get_metrics_summary(tenant_id=tenant_id))
@@ -560,7 +568,7 @@ async def admin_sessions(
     auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
-    require_admin(auth_context)
+    require_staff(auth_context)
     container.access_control.validate_tenant_access(auth_context, tenant_id)
     return success_response(container.admin_service.list_sessions(tenant_id))
 
@@ -570,7 +578,7 @@ async def get_admin_prompts(
     request: Request,
     auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
-    require_admin(auth_context)
+    require_staff(auth_context)
     return success_response(get_container(request).admin_service.get_prompts())
 
 
@@ -579,7 +587,7 @@ async def get_admin_runtime_config(
     request: Request,
     auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
-    require_admin(auth_context)
+    require_staff(auth_context)
     return success_response(get_container(request).admin_service.get_runtime_config())
 
 
@@ -614,7 +622,7 @@ async def get_admin_policies(
     request: Request,
     auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
-    require_admin(auth_context)
+    require_staff(auth_context)
     return success_response(get_container(request).admin_service.get_policies())
 
 
@@ -642,7 +650,7 @@ async def get_admin_diagnostics(
     auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
-    require_admin(auth_context)
+    require_staff(auth_context)
     if tenant_id is not None:
         container.access_control.validate_tenant_access(auth_context, tenant_id)
     return success_response(
@@ -665,7 +673,7 @@ async def get_admin_session_monitor(
     auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
-    require_admin(auth_context)
+    require_staff(auth_context)
     container.access_control.validate_tenant_access(auth_context, tenant_id)
     return success_response(container.admin_service.get_session_monitor(tenant_id, session_id))
 
@@ -677,7 +685,7 @@ async def get_admin_rooms(
     auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
-    require_admin(auth_context)
+    require_staff(auth_context)
     container.access_control.validate_tenant_access(auth_context, tenant_id)
     return success_response(container.admin_service.list_rooms(tenant_id))
 
@@ -690,7 +698,7 @@ async def get_admin_knowledge_health(
     auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
-    require_admin(auth_context)
+    require_staff(auth_context)
     container.access_control.validate_tenant_access(auth_context, tenant_id)
     return success_response(
         container.admin_service.get_knowledge_health_report(tenant_id, knowledge_base_id)
@@ -706,7 +714,7 @@ async def get_admin_retrieval_miss_report(
     auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
-    require_admin(auth_context)
+    require_staff(auth_context)
     container.access_control.validate_tenant_access(auth_context, tenant_id)
     return success_response(
         container.admin_service.get_retrieval_miss_report(
@@ -725,7 +733,7 @@ async def get_admin_knowledge_effectiveness_report(
     auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
-    require_admin(auth_context)
+    require_staff(auth_context)
     container.access_control.validate_tenant_access(auth_context, tenant_id)
     return success_response(
         container.admin_service.get_knowledge_effectiveness_report(
@@ -740,7 +748,7 @@ async def get_admin_provider_health(
     request: Request,
     auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
-    require_admin(auth_context)
+    require_staff(auth_context)
     return success_response(get_container(request).admin_service.provider_health())
 
 
@@ -751,7 +759,7 @@ async def get_admin_alerts(
     auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
-    require_admin(auth_context)
+    require_staff(auth_context)
     if tenant_id is not None:
         container.access_control.validate_tenant_access(auth_context, tenant_id)
     return success_response(container.admin_service.get_alerts(tenant_id=tenant_id))
@@ -767,7 +775,7 @@ async def get_admin_tool_catalog(
     auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
-    require_admin(auth_context)
+    require_staff(auth_context)
     if tenant_id is not None:
         container.access_control.validate_tenant_access(auth_context, tenant_id)
     return success_response(
@@ -790,7 +798,7 @@ async def get_admin_tool_catalog_categories(
     auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
     container = get_container(request)
-    require_admin(auth_context)
+    require_staff(auth_context)
     if tenant_id is not None:
         container.access_control.validate_tenant_access(auth_context, tenant_id)
     return success_response(
@@ -808,7 +816,7 @@ async def get_admin_plugins(
     request: Request,
     auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
 ) -> JSONResponse:
-    require_admin(auth_context)
+    require_staff(auth_context)
     return success_response(get_container(request).admin_service.list_plugins())
 
 
@@ -836,25 +844,67 @@ async def disable_admin_plugin(
 async def rtc_websocket(websocket: WebSocket, room_id: str) -> None:
     await websocket.accept()
     container: Container = websocket.app.state.container
+    request_id_token = None
     try:
         auth_context = await container.auth_service.authenticate_websocket(websocket)
+        connection_request_id = websocket.headers.get("x-request-id") or f"wsreq_{uuid4().hex[:12]}"
+        request_id_token = set_request_id(connection_request_id)
         tenant_id = websocket.query_params.get("tenant_id")
         if not tenant_id:
             await websocket.send_json({"type": "error", "message": "missing tenant_id"})
-            await websocket.close(code=4401)
+            await websocket.close(code=4400)
             return
         container.access_control.validate_tenant_access(auth_context, tenant_id)
         while True:
             payload = await websocket.receive_json()
-            for event in await container.rtc_service.handle_event(
-                tenant_id,
-                room_id,
-                payload,
-                auth_context.host_auth_context,
-            ):
+            if not isinstance(payload, dict):
+                await websocket.send_json(
+                    {
+                        "type": "error",
+                        "code": "validation_error",
+                        "message": "invalid event payload",
+                    }
+                )
+                continue
+            # Optional per-message override for better correlation.
+            message_request_id = payload.get("request_id")
+            message_token = None
+            if isinstance(message_request_id, str) and message_request_id.strip():
+                message_token = set_request_id(message_request_id.strip())
+            try:
+                events = await container.rtc_service.handle_event(
+                    tenant_id,
+                    room_id,
+                    payload,
+                    auth_context.host_auth_context,
+                )
+            except AppError as exc:
+                await websocket.send_json(
+                    {
+                        "type": "error",
+                        "code": exc.code,
+                        "message": exc.message,
+                        "details": exc.details or {},
+                    }
+                )
+                if exc.status_code == 401:
+                    await websocket.close(code=4401)
+                    return
+                if exc.status_code == 403:
+                    await websocket.close(code=4403)
+                    return
+                continue
+            finally:
+                if message_token is not None:
+                    reset_request_id(message_token)
+            for event in events:
                 await websocket.send_json(event)
-    except AppError as exc:
-        await websocket.send_json({"type": "error", "message": exc.message, "code": exc.code})
-        await websocket.close(code=4401)
     except WebSocketDisconnect:
         return
+    except AppError as exc:
+        await websocket.send_json({"type": "error", "message": exc.message, "code": exc.code})
+        await websocket.close(code=4401 if exc.status_code == 401 else 4400)
+        return
+    finally:
+        if request_id_token is not None:
+            reset_request_id(request_id_token)

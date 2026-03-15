@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from customer_ai_runtime.application.runtime import DiagnosticsService, zh
 from customer_ai_runtime.core.errors import AppError
 from customer_ai_runtime.domain.models import (
     DiagnosticLevel,
@@ -15,15 +16,13 @@ from customer_ai_runtime.domain.models import (
     SessionState,
     utcnow,
 )
-from customer_ai_runtime.repositories.memory import InMemorySessionRepository
-
-from customer_ai_runtime.application.runtime import DiagnosticsService, zh
+from customer_ai_runtime.repositories.base import SessionRepository
 
 
 class SessionService:
     def __init__(
         self,
-        repository: InMemorySessionRepository,
+        repository: SessionRepository,
         diagnostics: DiagnosticsService,
     ) -> None:
         self._repository = repository
@@ -89,12 +88,12 @@ class SessionService:
             if self._is_same_intent(top, frame):
                 frame.created_at = top.created_at
                 frame.low_confidence_count = (
-                    top.low_confidence_count + 1
-                    if route_decision.confidence_band == "low"
-                    else 0
+                    top.low_confidence_count + 1 if route_decision.confidence_band == "low" else 0
                 )
                 session.intent_stack[-1] = frame
-            elif len(session.intent_stack) >= 2 and self._is_same_intent(session.intent_stack[-2], frame):
+            elif len(session.intent_stack) >= 2 and self._is_same_intent(
+                session.intent_stack[-2], frame
+            ):
                 previous = session.intent_stack[-2]
                 frame.low_confidence_count = (
                     previous.low_confidence_count + 1

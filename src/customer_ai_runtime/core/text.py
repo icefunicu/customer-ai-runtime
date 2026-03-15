@@ -4,7 +4,6 @@ import hashlib
 import math
 import re
 
-
 TOKEN_RE = re.compile(r"[A-Za-z0-9_-]+|[\u4e00-\u9fff]")
 EMBEDDING_DIMENSIONS = 128
 

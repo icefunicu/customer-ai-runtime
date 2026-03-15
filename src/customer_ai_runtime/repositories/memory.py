@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from collections import deque
 from copy import deepcopy
 from pathlib import Path
@@ -65,8 +66,8 @@ class InMemoryKnowledgeRepository:
         self._load()
 
     def save_knowledge_base(self, knowledge_base: KnowledgeBase) -> KnowledgeBase:
-        self._knowledge_bases[(knowledge_base.tenant_id, knowledge_base.knowledge_base_id)] = deepcopy(
-            knowledge_base
+        self._knowledge_bases[(knowledge_base.tenant_id, knowledge_base.knowledge_base_id)] = (
+            deepcopy(knowledge_base)
         )
         self._flush()
         return deepcopy(knowledge_base)
@@ -168,13 +169,19 @@ class InMemoryKnowledgeRepository:
         payload = _read_json(self._storage_path, default={})
         for item in payload.get("knowledge_bases", []):
             knowledge_base = KnowledgeBase.model_validate(item)
-            self._knowledge_bases[(knowledge_base.tenant_id, knowledge_base.knowledge_base_id)] = knowledge_base
+            self._knowledge_bases[(knowledge_base.tenant_id, knowledge_base.knowledge_base_id)] = (
+                knowledge_base
+            )
         for item in payload.get("versions", []):
             version = KnowledgeVersion.model_validate(item)
-            self._versions.setdefault((version.tenant_id, version.knowledge_base_id), []).append(version)
+            self._versions.setdefault((version.tenant_id, version.knowledge_base_id), []).append(
+                version
+            )
         for item in payload.get("documents", []):
             document = KnowledgeDocument.model_validate(item)
-            self._documents.setdefault((document.tenant_id, document.knowledge_base_id), []).append(document)
+            self._documents.setdefault((document.tenant_id, document.knowledge_base_id), []).append(
+                document
+            )
         for item in payload.get("chunks", []):
             chunk = KnowledgeChunk.model_validate(item)
             self._chunks.setdefault((chunk.tenant_id, chunk.knowledge_base_id), []).append(chunk)
@@ -283,8 +290,14 @@ def _state_file(storage_root: str | Path | None, filename: str) -> Path | None:
 def _read_json(path: Path, default):
     if not path.exists():
         return default
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return default
 
 
 def _write_json(path: Path, payload: object) -> None:
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(f".{path.name}.tmp")
+    tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp_path, path)

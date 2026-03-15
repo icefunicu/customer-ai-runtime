@@ -252,6 +252,9 @@ runtime.register_plugin(OrderStatusTool())
 | [docs/plugin-system.md](docs/plugin-system.md) | 插件系统设计 |
 | [docs/roadmap.md](docs/roadmap.md) | 实施路线图 |
 | [docs/deployment.md](docs/deployment.md) | 部署指南 |
+| [docs/events.md](docs/events.md) | 诊断事件与埋点约定 |
+| [docs/slo.md](docs/slo.md) | 性能口径与 SLO |
+| [docs/storage.md](docs/storage.md) | 存储与多实例说明 |
 
 ## 测试
 

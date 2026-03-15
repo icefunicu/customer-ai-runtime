@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from customer_ai_runtime.application.plugins import HumanHandoffPlugin, PluginRegistry, context_to_plugin_context
+from customer_ai_runtime.application.plugins import (
+    HumanHandoffPlugin,
+    PluginRegistry,
+    context_to_plugin_context,
+)
 from customer_ai_runtime.domain.models import Session, SessionState
 from customer_ai_runtime.domain.platform import BusinessContext, PluginKind
 

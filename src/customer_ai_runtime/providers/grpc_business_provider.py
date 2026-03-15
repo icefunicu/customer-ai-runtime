@@ -15,7 +15,7 @@ class GrpcBusinessAdapter(BusinessAdapter):
             raise AppError(
                 code="provider_error",
                 message="未配置 CUSTOMER_AI_BUSINESS_GRPC_TARGET，无法启用 gRPC 业务适配器。",
-                status_code=500,
+                status_code=503,
             )
         self._target = settings.business_grpc_target
         self._timeout = settings.business_grpc_timeout_seconds
@@ -28,7 +28,7 @@ class GrpcBusinessAdapter(BusinessAdapter):
             raise AppError(
                 code="provider_error",
                 message="未配置 gRPC 工具方法映射。",
-                status_code=500,
+                status_code=503,
                 details={"tool_name": query.tool_name},
             )
         try:
@@ -37,7 +37,7 @@ class GrpcBusinessAdapter(BusinessAdapter):
             raise AppError(
                 code="provider_error",
                 message="未安装 grpcio，请先安装 `grpcio`。",
-                status_code=500,
+                status_code=503,
             ) from exc
 
         async with grpc.aio.insecure_channel(self._target) as channel:

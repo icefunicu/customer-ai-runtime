@@ -48,4 +48,3 @@ class VectorStoreProvider(ABC):
 class BusinessAdapter(ABC):
     @abstractmethod
     async def execute(self, query: BusinessQuery) -> BusinessResult: ...
-

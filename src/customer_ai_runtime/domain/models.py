@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
@@ -16,7 +16,7 @@ def new_id(prefix: str) -> str:
     return f"{prefix}_{uuid4().hex[:12]}"
 
 
-class Channel(str, Enum):
+class Channel(StrEnum):
     WEB = "web"
     APP = "app"
     H5 = "h5"
@@ -26,33 +26,33 @@ class Channel(str, Enum):
     ADMIN = "admin"
 
 
-class MessageRole(str, Enum):
+class MessageRole(StrEnum):
     USER = "user"
     ASSISTANT = "assistant"
     HUMAN = "human"
     SYSTEM = "system"
 
 
-class MessageFeedbackType(str, Enum):
+class MessageFeedbackType(StrEnum):
     UPVOTE = "upvote"
     DOWNVOTE = "downvote"
     REQUEST_HUMAN = "request_human"
 
 
-class SessionState(str, Enum):
+class SessionState(StrEnum):
     ACTIVE = "active"
     WAITING_HUMAN = "waiting_human"
     HUMAN_IN_SERVICE = "human_in_service"
     CLOSED = "closed"
 
 
-class ResolutionStatus(str, Enum):
+class ResolutionStatus(StrEnum):
     RESOLVED = "resolved"
     UNRESOLVED = "unresolved"
     ESCALATED = "escalated"
 
 
-class RouteType(str, Enum):
+class RouteType(StrEnum):
     KNOWLEDGE = "knowledge"
     BUSINESS = "business"
     HANDOFF = "handoff"
@@ -61,7 +61,7 @@ class RouteType(str, Enum):
     FALLBACK = "fallback"
 
 
-class RTCState(str, Enum):
+class RTCState(StrEnum):
     CREATED = "created"
     JOINED = "joined"
     LISTENING = "listening"
@@ -71,7 +71,7 @@ class RTCState(str, Enum):
     ENDED = "ended"
 
 
-class DiagnosticLevel(str, Enum):
+class DiagnosticLevel(StrEnum):
     INFO = "info"
     WARNING = "warning"
     ERROR = "error"
@@ -149,7 +149,7 @@ class KnowledgeBase(BaseModel):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
-class KnowledgeVersionStatus(str, Enum):
+class KnowledgeVersionStatus(StrEnum):
     DRAFT = "draft"
     ACTIVE = "active"
     ARCHIVED = "archived"
@@ -160,7 +160,7 @@ class KnowledgeChunkConfig(BaseModel):
     overlap: int = Field(default=20, ge=0, le=512)
 
     @model_validator(mode="after")
-    def validate_overlap(self) -> "KnowledgeChunkConfig":
+    def validate_overlap(self) -> KnowledgeChunkConfig:
         if self.overlap >= self.max_tokens:
             raise ValueError("overlap must be smaller than max_tokens")
         return self

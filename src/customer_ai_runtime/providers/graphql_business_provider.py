@@ -17,10 +17,9 @@ class GraphQLBusinessAdapter(BusinessAdapter):
             raise AppError(
                 code="provider_error",
                 message=(
-                    "未配置 CUSTOMER_AI_BUSINESS_GRAPHQL_ENDPOINT，"
-                    "无法启用 GraphQL 业务适配器。"
+                    "未配置 CUSTOMER_AI_BUSINESS_GRAPHQL_ENDPOINT，无法启用 GraphQL 业务适配器。"
                 ),
-                status_code=500,
+                status_code=503,
             )
         self._endpoint = settings.business_graphql_endpoint.rstrip("/")
         self._api_key = settings.business_graphql_api_key
@@ -35,7 +34,7 @@ class GraphQLBusinessAdapter(BusinessAdapter):
             raise AppError(
                 code="provider_error",
                 message="未配置 GraphQL 工具查询模板。",
-                status_code=500,
+                status_code=503,
                 details={"tool_name": query.tool_name},
             )
         headers = {"Content-Type": "application/json", **self._headers}

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from customer_ai_runtime.domain.models import IntentFrame
 
 
-class IndustryType(str, Enum):
+class IndustryType(StrEnum):
     ECOMMERCE = "ecommerce"
     SAAS = "saas"
     EDUCATION = "education"
@@ -17,7 +17,7 @@ class IndustryType(str, Enum):
     CUSTOM = "custom"
 
 
-class PluginKind(str, Enum):
+class PluginKind(StrEnum):
     ROUTE_STRATEGY = "route_strategy"
     BUSINESS_TOOL = "business_tool"
     HUMAN_HANDOFF = "human_handoff"
@@ -27,7 +27,7 @@ class PluginKind(str, Enum):
     RESPONSE_POST_PROCESSOR = "response_post_processor"
 
 
-class AuthMode(str, Enum):
+class AuthMode(StrEnum):
     API_KEY = "api_key"
     SESSION = "session"
     JWT = "jwt"

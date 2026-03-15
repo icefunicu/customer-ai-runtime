@@ -4,7 +4,12 @@ from fastapi import FastAPI
 
 from customer_ai_runtime.application.auth import AuthBridgePlugin
 from customer_ai_runtime.application.plugins import PluginDescriptor
-from customer_ai_runtime.domain.platform import AuthMode, AuthRequestContext, PluginKind, ResolvedAuthContext
+from customer_ai_runtime.domain.platform import (
+    AuthMode,
+    AuthRequestContext,
+    PluginKind,
+    ResolvedAuthContext,
+)
 from customer_ai_runtime.integration import CustomerAIRuntimeModule
 
 

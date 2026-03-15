@@ -8,6 +8,12 @@
 - 内容类型：`application/json`
 - 核心标识：`tenant_id`、`session_id`、`knowledge_base_id`
 
+### 1.3 权限约定（当前实现）
+
+- 以 `/api/v1/admin/*` 开头的读取型接口：`admin` / `operator`
+- 以 `/api/v1/admin/*` 开头的写入型接口（`PUT`/部分 `POST`）：仅 `admin`
+- 会话人工协同（`claim-human`、`messages/human`、`close`）：仅 `admin`
+
 ### 1.1 认证方式
 
 任选其一：
@@ -97,10 +103,12 @@
 ### `POST /api/v1/sessions/{session_id}/claim-human`
 
 - 用途：人工接管会话
+- 权限：`admin`
 
 ### `POST /api/v1/sessions/{session_id}/messages/human`
 
 - 用途：人工写入回复
+- 权限：`admin`
 
 ### `POST /api/v1/sessions/{session_id}/messages/{message_id}/feedback`
 
@@ -117,6 +125,7 @@
 - 用途：关闭会话
 - 支持字段：`satisfaction_score`（1-5，可选）
 - 支持字段：`resolution_status`（`resolved` / `unresolved` / `escalated`，可选）
+- 权限：`admin`
 
 ## 5. 文本客服接口
 

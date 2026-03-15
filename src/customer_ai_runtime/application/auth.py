@@ -76,7 +76,9 @@ class SessionAuthBridgePlugin(AuthBridgePlugin):
 
     async def can_handle(self, request_data: AuthRequestContext) -> bool:
         cookie_name = self._settings.host_session_cookie_name
-        return bool(self._settings.get_host_session_map()) and bool(request_data.cookies.get(cookie_name))
+        return bool(self._settings.get_host_session_map()) and bool(
+            request_data.cookies.get(cookie_name)
+        )
 
     async def authenticate(self, request_data: AuthRequestContext) -> ResolvedAuthContext:
         cookie_name = self._settings.host_session_cookie_name
@@ -101,9 +103,9 @@ class JWTAuthBridgePlugin(AuthBridgePlugin):
         self._settings = settings
 
     async def can_handle(self, request_data: AuthRequestContext) -> bool:
-        return bool(self._settings.host_jwt_secret) and request_data.headers.get("authorization", "").startswith(
-            "Bearer "
-        )
+        return bool(self._settings.host_jwt_secret) and request_data.headers.get(
+            "authorization", ""
+        ).startswith("Bearer ")
 
     async def authenticate(self, request_data: AuthRequestContext) -> ResolvedAuthContext:
         token = request_data.headers["authorization"].split(" ", 1)[1]
@@ -130,7 +132,9 @@ class CustomTokenAuthBridgePlugin(AuthBridgePlugin):
         self._settings = settings
 
     async def can_handle(self, request_data: AuthRequestContext) -> bool:
-        return bool(self._settings.get_host_token_map()) and bool(request_data.headers.get("x-host-token"))
+        return bool(self._settings.get_host_token_map()) and bool(
+            request_data.headers.get("x-host-token")
+        )
 
     async def authenticate(self, request_data: AuthRequestContext) -> ResolvedAuthContext:
         token = request_data.headers.get("x-host-token")
@@ -176,23 +180,34 @@ class AuthService:
             return await auth_plugin.authenticate(request_data)
         if handled:
             raise AppError(code="host_auth_error", message="authentication failed", status_code=401)
-        raise AppError(code="auth_error", message="missing authentication credentials", status_code=401)
+        raise AppError(
+            code="auth_error", message="missing authentication credentials", status_code=401
+        )
 
 
 def build_builtin_auth_plugins(settings: Settings) -> list[AuthBridgePlugin]:
-    return [
-        ApiKeyAuthBridgePlugin(settings),
-        SessionAuthBridgePlugin(settings),
-        JWTAuthBridgePlugin(settings),
-        CustomTokenAuthBridgePlugin(settings),
-    ]
+    plugins: list[AuthBridgePlugin] = []
+    if settings.enable_api_key_auth:
+        plugins.append(ApiKeyAuthBridgePlugin(settings))
+    plugins.extend(
+        [
+            SessionAuthBridgePlugin(settings),
+            JWTAuthBridgePlugin(settings),
+            CustomTokenAuthBridgePlugin(settings),
+        ]
+    )
+    return plugins
 
 
-def _resolved_auth_from_payload(payload: dict[str, Any], auth_mode: AuthMode) -> ResolvedAuthContext:
+def _resolved_auth_from_payload(
+    payload: dict[str, Any], auth_mode: AuthMode
+) -> ResolvedAuthContext:
     tenant_id = str(payload["tenant_id"])
     host_auth_context = HostAuthContext(
         tenant_id=tenant_id,
-        principal_id=str(payload.get("principal_id") or payload.get("sub") or payload.get("user_id")),
+        principal_id=str(
+            payload.get("principal_id") or payload.get("sub") or payload.get("user_id")
+        ),
         principal_type=str(payload.get("principal_type", "user")),
         roles=[str(item) for item in payload.get("roles", [])],
         permissions=[str(item) for item in payload.get("permissions", [])],
@@ -220,9 +235,13 @@ def _decode_hs256_jwt(
     try:
         encoded_header, encoded_payload, encoded_signature = token.split(".")
     except ValueError as exc:
-        raise AppError(code="host_auth_error", message="invalid jwt format", status_code=401) from exc
-    signing_input = f"{encoded_header}.{encoded_payload}".encode("utf-8")
-    expected_signature = _base64url_encode(hmac.new(secret.encode("utf-8"), signing_input, hashlib.sha256).digest())
+        raise AppError(
+            code="host_auth_error", message="invalid jwt format", status_code=401
+        ) from exc
+    signing_input = f"{encoded_header}.{encoded_payload}".encode()
+    expected_signature = _base64url_encode(
+        hmac.new(secret.encode("utf-8"), signing_input, hashlib.sha256).digest()
+    )
     if not hmac.compare_digest(expected_signature, encoded_signature):
         raise AppError(code="host_auth_error", message="invalid jwt signature", status_code=401)
     payload = json.loads(_base64url_decode(encoded_payload))
@@ -242,4 +261,4 @@ def _base64url_encode(value: bytes) -> str:
 
 def _base64url_decode(value: str) -> str:
     padding = "=" * (-len(value) % 4)
-    return base64.urlsafe_b64decode(f"{value}{padding}".encode("utf-8")).decode("utf-8")
+    return base64.urlsafe_b64decode(f"{value}{padding}".encode()).decode("utf-8")

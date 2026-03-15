@@ -4,6 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from customer_ai_runtime.core.limits import AUDIO_BASE64_MAX_CHARS
 from customer_ai_runtime.domain.models import MessageFeedbackType, ResolutionStatus
 
 ChannelType = Literal["web", "app", "h5", "mini_program", "app_voice", "rtc", "admin"]
@@ -108,7 +109,7 @@ class BusinessQueryRequest(TenantScopedRequest):
 class VoiceTurnRequest(TenantScopedRequest):
     session_id: str | None = None
     channel: ChannelType = "app_voice"
-    audio_base64: str = Field(min_length=1)
+    audio_base64: str = Field(min_length=1, max_length=AUDIO_BASE64_MAX_CHARS)
     content_type: str = Field(default="text/plain", min_length=1, max_length=128)
     transcript_hint: str | None = Field(default=None, max_length=4000)
     knowledge_base_id: str | None = None

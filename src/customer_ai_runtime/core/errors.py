@@ -13,4 +13,3 @@ class AppError(Exception):
 
     def __str__(self) -> str:
         return f"{self.code}: {self.message}"
-

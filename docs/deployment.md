@@ -164,9 +164,11 @@ curl http://127.0.0.1:8000/healthz
 管理面检查：
 
 ```bash
-curl -H "X-API-Key: demo-admin-key" http://127.0.0.1:8000/api/v1/admin/providers/health
-curl -H "X-API-Key: demo-admin-key" http://127.0.0.1:8000/api/v1/admin/metrics/summary
-curl -H "X-API-Key: demo-admin-key" http://127.0.0.1:8000/api/v1/admin/alerts
+# 请使用你在 CUSTOMER_AI_API_KEYS_JSON 中配置的管理员 Key。
+# 注意：生产环境禁止使用 demo-admin-key / demo-public-key。
+curl -H "X-API-Key: <your-admin-key>" http://127.0.0.1:8000/api/v1/admin/providers/health
+curl -H "X-API-Key: <your-admin-key>" http://127.0.0.1:8000/api/v1/admin/metrics/summary
+curl -H "X-API-Key: <your-admin-key>" http://127.0.0.1:8000/api/v1/admin/alerts
 ```
 
 预期结果：
@@ -183,6 +185,13 @@ curl -H "X-API-Key: demo-admin-key" http://127.0.0.1:8000/api/v1/admin/alerts
 - 观测能力以管理接口和本地持久化事件为主，尚未内建 Prometheus exporter
 - Docker Compose 适合单机或小规模环境，不等同于高可用生产集群方案
 - 当前存储层仍以本地 JSON 仓储为主，更适合开发、演示和轻量部署
+
+## 7.1 安全与保护性配置（当前实现）
+
+- 生产环境禁止使用 demo API key，必须显式配置 `CUSTOMER_AI_API_KEYS_JSON`，或禁用 API key 鉴权（`CUSTOMER_AI_ENABLE_API_KEY_AUTH=false`）。
+- 请求体大小限制：`CUSTOMER_AI_MAX_REQUEST_BYTES`（基于 `Content-Length` 拦截）。
+- 简易限流：`CUSTOMER_AI_RATE_LIMIT_ENABLED`、`CUSTOMER_AI_RATE_LIMIT_PER_MINUTE`、`CUSTOMER_AI_RATE_LIMIT_BURST`。
+- 诊断事件导出（可选）：`CUSTOMER_AI_DIAGNOSTICS_EXPORT_PATH`，会以 JSONL 追加写入文件，便于日志采集器摄取。
 
 ## 8. Future Target
 

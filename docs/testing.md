@@ -61,6 +61,15 @@
 .venv\Scripts\python.exe -m pytest
 ```
 
+Linux/macOS 示例：
+
+```bash
+python -m pytest
+python -m ruff check .
+python -m ruff format --check .
+python -m compileall -q src tests
+```
+
 ## 5. 验收重点
 
 - 文本、语音、RTC 都能正常完成一轮处理

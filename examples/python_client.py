@@ -4,8 +4,8 @@ import base64
 
 import httpx
 
-
 BASE_URL = "http://127.0.0.1:8000"
+# 本示例默认使用开发环境 demo key；生产环境请使用 CUSTOMER_AI_API_KEYS_JSON 配置真实 Key。
 HEADERS = {"X-API-Key": "demo-public-key"}
 
 
@@ -53,4 +53,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

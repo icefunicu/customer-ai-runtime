@@ -148,7 +148,9 @@ class RoutingService:
             merged_objects.update(business_context.business_objects)
             business_context.business_objects = merged_objects
             integration_objects = dict(snapshot["business_objects"])
-            integration_objects.update(business_context.integration_context.get("business_objects") or {})
+            integration_objects.update(
+                business_context.integration_context.get("business_objects") or {}
+            )
             business_context.integration_context["business_objects"] = integration_objects
         return business_context
 
@@ -198,7 +200,9 @@ class RoutingService:
                     context_snapshot=snapshot,
                 )
 
-        inferred_tool = self._infer_tool_from_context(normalized_message, business_context, active_intent)
+        inferred_tool = self._infer_tool_from_context(
+            normalized_message, business_context, active_intent
+        )
         if inferred_tool is None:
             return None
         snapshot = self._merge_snapshot(
@@ -212,7 +216,9 @@ class RoutingService:
         return RouteDecision(
             route=RouteType.BUSINESS,
             confidence=self._clamp_confidence(confidence),
-            reason=zh("\\u547d\\u4e2d\\u9875\\u9762\\u573a\\u666f\\u4e0e\\u4e1a\\u52a1\\u5bf9\\u8c61"),
+            reason=zh(
+                "\\u547d\\u4e2d\\u9875\\u9762\\u573a\\u666f\\u4e0e\\u4e1a\\u52a1\\u5bf9\\u8c61"
+            ),
             intent=inferred_tool,
             confidence_band="medium",
             tool_name=inferred_tool,
@@ -232,14 +238,20 @@ class RoutingService:
         signals = list(decision.matched_signals)
 
         if decision.route == RouteType.BUSINESS:
-            if active_intent and active_intent.tool_name == decision.tool_name and self._is_contextual_followup(message):
+            if (
+                active_intent
+                and active_intent.tool_name == decision.tool_name
+                and self._is_contextual_followup(message)
+            ):
                 decision.confidence = self._clamp_confidence(decision.confidence + 0.05)
                 signals.append("intent_stack:active_match")
                 snapshot = self._merge_snapshot(active_intent.context_snapshot, snapshot)
             if decision.tool_name and self._context_supports_tool(decision.tool_name, snapshot):
                 decision.confidence = self._clamp_confidence(decision.confidence + 0.08)
                 signals.append("context:business_object")
-            if decision.tool_name and self._page_matches_tool(decision.tool_name, business_context.page_context):
+            if decision.tool_name and self._page_matches_tool(
+                decision.tool_name, business_context.page_context
+            ):
                 decision.confidence = self._clamp_confidence(decision.confidence + 0.06)
                 signals.append("context:page_context")
             decision.context_snapshot = snapshot
@@ -251,7 +263,9 @@ class RoutingService:
         ):
             decision.confidence = self._clamp_confidence(decision.confidence - 0.12)
             signals.append("context:business_followup_penalty")
-            decision.context_snapshot = self._merge_snapshot(active_intent.context_snapshot, snapshot)
+            decision.context_snapshot = self._merge_snapshot(
+                active_intent.context_snapshot, snapshot
+            )
         else:
             decision.context_snapshot = snapshot
 
@@ -266,7 +280,9 @@ class RoutingService:
         policies = self._runtime_config.get_policies()
         if decision.route in {RouteType.HANDOFF, RouteType.RISK}:
             decision.confidence_band = "high"
-            decision.context_snapshot = decision.context_snapshot or self._context_snapshot(business_context)
+            decision.context_snapshot = decision.context_snapshot or self._context_snapshot(
+                business_context
+            )
             return decision
 
         decision.confidence_band = self._confidence_band(
@@ -274,28 +290,36 @@ class RoutingService:
             policies.route_fallback_confidence_threshold,
         )
         if decision.confidence >= policies.route_fallback_confidence_threshold:
-            decision.context_snapshot = decision.context_snapshot or self._context_snapshot(business_context)
+            decision.context_snapshot = decision.context_snapshot or self._context_snapshot(
+                business_context
+            )
             return decision
 
         signals = list(decision.matched_signals)
         signals.append("threshold:route_fallback")
-        if decision.confidence < policies.route_handoff_confidence_threshold or self._should_escalate_low_confidence(
-            business_context
+        if (
+            decision.confidence < policies.route_handoff_confidence_threshold
+            or self._should_escalate_low_confidence(business_context)
         ):
             return RouteDecision(
                 route=RouteType.HANDOFF,
                 confidence=decision.confidence,
-                reason=zh("\\u610f\\u56fe\\u7f6e\\u4fe1\\u5ea6\\u8fc7\\u4f4e\\uff0c\\u5efa\\u8bae\\u8f6c\\u4eba\\u5de5"),
+                reason=zh(
+                    "\\u610f\\u56fe\\u7f6e\\u4fe1\\u5ea6\\u8fc7\\u4f4e\\uff0c\\u5efa\\u8bae\\u8f6c\\u4eba\\u5de5"
+                ),
                 intent="low_confidence_handoff",
                 confidence_band="low",
                 requires_handoff=True,
                 matched_signals=signals + ["threshold:route_handoff"],
-                context_snapshot=decision.context_snapshot or self._context_snapshot(business_context),
+                context_snapshot=decision.context_snapshot
+                or self._context_snapshot(business_context),
             )
         return RouteDecision(
             route=RouteType.FALLBACK,
             confidence=decision.confidence,
-            reason=zh("\\u610f\\u56fe\\u7f6e\\u4fe1\\u5ea6\\u4e0d\\u8db3\\uff0c\\u5148\\u8fdb\\u5165\\u6f84\\u6e05\\u515c\\u5e95"),
+            reason=zh(
+                "\\u610f\\u56fe\\u7f6e\\u4fe1\\u5ea6\\u4e0d\\u8db3\\uff0c\\u5148\\u8fdb\\u5165\\u6f84\\u6e05\\u515c\\u5e95"
+            ),
             intent="fallback_clarification",
             confidence_band="low",
             matched_signals=signals,
