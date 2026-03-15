@@ -129,13 +129,13 @@ class AdminService:
         duration_by_channel: dict[str, list[int]] = {}
         for event in diagnostics:
             duration = event.context.get("duration_ms")
-            channel = event.context.get("channel")
+            event_channel = event.context.get("channel")
             if not isinstance(duration, int) or duration <= 0:
                 continue
-            if not isinstance(channel, str) or not channel:
+            if not isinstance(event_channel, str) or not event_channel:
                 continue
             duration_samples.append(duration)
-            duration_by_channel.setdefault(channel, []).append(duration)
+            duration_by_channel.setdefault(event_channel, []).append(duration)
 
         return {
             "tenant_id": tenant_id,

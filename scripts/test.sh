@@ -6,5 +6,6 @@ python -m compileall -q src tests
 python -m ruff check .
 python -m ruff format --check .
 
-python -m pytest
+python -m mypy src
 
+python -m pytest

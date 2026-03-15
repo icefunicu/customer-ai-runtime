@@ -34,6 +34,7 @@ dev = [
   "pytest>=9.0.2",
   "pytest-asyncio>=1.2.0",
   "pytest-cov>=7.0.0",
+  "mypy>=1.11.0",
   "ruff>=0.14.2"
 ]
 providers = [
@@ -65,3 +66,15 @@ target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.13"
+packages = ["customer_ai_runtime"]
+mypy_path = ["src"]
+ignore_missing_imports = true
+warn_return_any = false
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+check_untyped_defs = false
+disallow_untyped_defs = false

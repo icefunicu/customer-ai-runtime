@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -108,19 +109,20 @@ class RuntimeConfigService:
     def _flush(self) -> None:
         if not self._storage_path:
             return
-        self._storage_path.write_text(
-            json.dumps(
-                {
-                    "prompts": self._prompts.model_dump(mode="json"),
-                    "policies": self._policies.model_dump(mode="json"),
-                    "alerts": self._alerts.model_dump(mode="json"),
-                    "plugin_states": self._plugin_states,
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
+        payload = {
+            "prompts": self._prompts.model_dump(mode="json"),
+            "policies": self._policies.model_dump(mode="json"),
+            "alerts": self._alerts.model_dump(mode="json"),
+            "plugin_states": self._plugin_states,
+        }
+        # Keep runtime config consistent with state JSON writes.
+        # Use atomic replace to avoid partial writes.
+        tmp_path = self._storage_path.with_name(f".{self._storage_path.name}.tmp")
+        tmp_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+        os.replace(tmp_path, self._storage_path)
 
 
 class MetricsService:

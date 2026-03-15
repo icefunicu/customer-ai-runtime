@@ -289,8 +289,8 @@ class LocalBusinessAdapter(BusinessAdapter):
                     status="missing_parameter",
                     summary="请提供账号编号，例如 ACC-3001。",
                 )
-            result = self._accounts.get(account_id)
-            if not result:
+            account = self._accounts.get(account_id)
+            if not account:
                 return BusinessResult(
                     tool_name=tool_name,
                     status="not_found",
@@ -300,10 +300,10 @@ class LocalBusinessAdapter(BusinessAdapter):
                 tool_name=tool_name,
                 status="success",
                 summary=(
-                    f"账号 {account_id} 当前状态 {result['status']}，"
-                    f"会员等级 {result['level']}，积分 {result['points']}。"
+                    f"账号 {account_id} 当前状态 {account['status']}，"
+                    f"会员等级 {account['level']}，积分 {account['points']}。"
                 ),
-                data=result,
+                data=account,
                 integration_context=query.integration_context,
             )
         if tool_name == "subscription_lookup":

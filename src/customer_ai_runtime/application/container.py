@@ -126,9 +126,13 @@ def build_container(settings: Settings, overrides: ContainerOverrides | None = N
             export_path = Path(settings.storage_root) / export_path
         exporter = DiagnosticsJsonlExporter(export_path)
     diagnostics = DiagnosticsService(diagnostics_repository, exporter=exporter)
+
+    def _persist_plugin_state(plugin_id: str, enabled: bool) -> None:
+        runtime_config.set_plugin_state(plugin_id, enabled)
+
     plugin_registry = PluginRegistry(
         persisted_states=runtime_config.get_plugin_states(),
-        on_state_change=runtime_config.set_plugin_state,
+        on_state_change=_persist_plugin_state,
     )
     access_control = AccessControlService()
 
@@ -137,10 +141,10 @@ def build_container(settings: Settings, overrides: ContainerOverrides | None = N
     tts_provider = overrides.tts_provider or _build_tts_provider(settings)
     vector_store = overrides.vector_store or _build_vector_store(settings)
     business_adapter = overrides.business_adapter or _build_business_adapter(settings)
-    for plugin in build_builtin_auth_plugins(settings):
-        plugin_registry.register(plugin)
-    for plugin in build_builtin_plugins(runtime_config, business_adapter):
-        plugin_registry.register(plugin)
+    for auth_plugin in build_builtin_auth_plugins(settings):
+        plugin_registry.register(auth_plugin)
+    for builtin_plugin in build_builtin_plugins(runtime_config, business_adapter):
+        plugin_registry.register(builtin_plugin)
     auth_service = AuthService(plugin_registry)
     tool_catalog = ToolCatalogService(plugin_registry)
 

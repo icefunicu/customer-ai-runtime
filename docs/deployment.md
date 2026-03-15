@@ -11,8 +11,8 @@
 
 当前事实：
 
-- 已提供 [Dockerfile](/E:/Project/customer-ai-runtime/Dockerfile)
-- 已提供 [docker-compose.yml](/E:/Project/customer-ai-runtime/deploy/docker-compose.yml)
+- 已提供 [Dockerfile](../Dockerfile)
+- 已提供 [docker-compose.yml](../deploy/docker-compose.yml)
 - 已提供 `.env` 方式的环境变量配置
 - 已提供管理接口用于运行时配置热更新、诊断与指标查看
 
@@ -136,7 +136,7 @@ docker compose -f deploy/docker-compose.yml logs -f qdrant
 
 当前仓库已落地的观测能力：
 
-- 应用日志：标准输出日志，格式由 [logging.py](/E:/Project/customer-ai-runtime/src/customer_ai_runtime/core/logging.py) 配置
+- 应用日志：标准输出日志，格式由 [logging.py](../src/customer_ai_runtime/core/logging.py) 配置
 - 指标计数：内存计数器，可通过管理接口获取
 - 诊断事件：持久化到 `storage/state/diagnostics.json`
 - 提供商健康：可通过管理接口查看配置就绪态
@@ -191,6 +191,7 @@ curl -H "X-API-Key: <your-admin-key>" http://127.0.0.1:8000/api/v1/admin/alerts
 - 生产环境禁止使用 demo API key，必须显式配置 `CUSTOMER_AI_API_KEYS_JSON`，或禁用 API key 鉴权（`CUSTOMER_AI_ENABLE_API_KEY_AUTH=false`）。
 - 请求体大小限制：`CUSTOMER_AI_MAX_REQUEST_BYTES`（基于 `Content-Length` 拦截）。
 - 简易限流：`CUSTOMER_AI_RATE_LIMIT_ENABLED`、`CUSTOMER_AI_RATE_LIMIT_PER_MINUTE`、`CUSTOMER_AI_RATE_LIMIT_BURST`。
+- 代理真实 IP（可选）：若服务部署在反向代理/API Gateway 后，可启用 `CUSTOMER_AI_TRUST_X_FORWARDED_FOR=true` 让限流使用 `X-Forwarded-For` 的首个 IP。
 - 诊断事件导出（可选）：`CUSTOMER_AI_DIAGNOSTICS_EXPORT_PATH`，会以 JSONL 追加写入文件，便于日志采集器摄取。
 
 ## 8. Future Target

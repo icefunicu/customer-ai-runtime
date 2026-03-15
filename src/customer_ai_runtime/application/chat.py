@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from time import perf_counter
+from typing import Any
 
 from customer_ai_runtime.application.business import (
     BusinessContextBuilder,
@@ -207,7 +208,7 @@ class ChatService:
             )
         )
 
-        response_payload = {
+        response_payload: dict[str, Any] = {
             "session_id": session.session_id,
             "state": session.state.value,
             "route": route_decision.route.value,

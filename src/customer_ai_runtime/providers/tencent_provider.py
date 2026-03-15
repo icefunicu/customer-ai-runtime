@@ -127,7 +127,7 @@ class TencentTTSProvider(TTSProvider):
             )
         return TTSResult(
             audio_base64=audio,
-            audio_format=payload["Codec"],
+            audio_format=str(payload["Codec"]),
             segments=[request.text],
         )
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
 from typing import Any
 
 from customer_ai_runtime.application.runtime import zh
@@ -13,6 +12,7 @@ from customer_ai_runtime.domain.models import (
     KnowledgeDocument,
     KnowledgeVersion,
     KnowledgeVersionStatus,
+    RetrievalHit,
     utcnow,
 )
 from customer_ai_runtime.providers.base import VectorStoreProvider
@@ -207,7 +207,7 @@ class KnowledgeService:
                 knowledge_base_id,
                 version_id=active_version.version_id,
             )[:top_k]
-            hits = [SimpleNamespace(chunk=chunk, score=0.1) for chunk in fallback_chunks]
+            hits = [RetrievalHit(chunk=chunk, score=0.1) for chunk in fallback_chunks]
         return citations_from_hits(hits)
 
     def health_report(self, tenant_id: str, knowledge_base_id: str) -> dict[str, Any]:
@@ -594,17 +594,14 @@ class KnowledgeService:
         self,
         knowledge_base_id: str,
         version_id: str,
-        hits: list[Any],
-    ) -> list[Any]:
-        normalized: list[Any] = []
+        hits: list[RetrievalHit],
+    ) -> list[RetrievalHit]:
+        normalized: list[RetrievalHit] = []
         for hit in hits:
             normalized_chunk = hit.chunk.model_copy(
                 update={"knowledge_base_id": knowledge_base_id, "version_id": version_id}
             )
-            if isinstance(hit, SimpleNamespace):
-                normalized.append(SimpleNamespace(chunk=normalized_chunk, score=hit.score))
-            else:
-                normalized.append(hit.model_copy(update={"chunk": normalized_chunk}))
+            normalized.append(hit.model_copy(update={"chunk": normalized_chunk}))
         return normalized
 
     def _evaluate_chunk_candidate(

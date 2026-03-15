@@ -105,6 +105,8 @@ source .venv/bin/activate  # Linux/Mac
 # 或 .venv\Scripts\activate  # Windows
 
 # 安装依赖
+# 国内网络环境可选：使用镜像源
+# export PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 pip install -e ".[dev]"
 
 # 若需 Pinecone / Milvus / gRPC / 阿里云 / 腾讯云 提供商
@@ -319,7 +321,7 @@ customer-ai-runtime/
 
 - 遵循 [Conventional Commits](https://www.conventionalcommits.org/) 提交规范
 - 代码风格使用 `ruff` 进行格式化
-- 类型检查使用 `mypy`
+- 类型检查：`mypy`
 - 所有功能需包含测试用例
 
 ```bash
@@ -330,6 +332,8 @@ ruff check .
 # 类型检查
 mypy src
 ```
+
+当前仓库 CI 门禁见 `.github/workflows/ci.yml`：`ruff check`、`ruff format --check`、`python -m compileall`、`mypy`、`pytest`。
 
 ## 许可证
 

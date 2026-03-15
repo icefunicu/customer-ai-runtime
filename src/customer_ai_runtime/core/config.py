@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = True
     rate_limit_per_minute: int = 120
     rate_limit_burst: int = 30
+    trust_x_forwarded_for: bool = False
     max_request_bytes: int = 3_000_000
     diagnostics_export_path: str | None = None
 

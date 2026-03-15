@@ -25,6 +25,7 @@ jobs:
           python -m ruff format --check .
       - name: Typecheck (Syntax)
         run: python -m compileall -q src tests
+      - name: Typecheck (mypy)
+        run: python -m mypy src
       - name: Test
         run: python -m pytest
-

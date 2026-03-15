@@ -47,7 +47,7 @@ class QdrantVectorStoreProvider(VectorStoreProvider):
         from customer_ai_runtime.core.text import build_embedding
 
         collection_name = self._collection_name(tenant_id, knowledge_base_id)
-        results = await self._client.search(
+        results = await self._client.search(  # type: ignore[attr-defined]
             collection_name=collection_name,
             query_vector=build_embedding(query),
             limit=top_k,
